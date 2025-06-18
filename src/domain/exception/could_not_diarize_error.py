@@ -1,0 +1,2 @@
+class CouldNotDiarizeError(Exception):
+    pass

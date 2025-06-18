@@ -1,0 +1,25 @@
+version: 1
+
+formatters:
+  baseFormat:
+    format: "[{levelname}] {asctime} - {message} ({filename} - {lineno})"
+    style: "{"
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: baseFormat
+    stream: ext://sys.stdout
+  file:
+    class: logging.FileHandler
+    level: INFO
+    filename: './src/log/app.log'
+    formatter: baseFormat
+loggers:
+  settings:
+    level: DEBUG
+    handlers: [console, file]
+    propagate: False
+root:
+  level: DEBUG
+  handlers: [console]
