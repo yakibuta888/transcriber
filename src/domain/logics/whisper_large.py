@@ -48,7 +48,7 @@ class WhisperTranscriber:
             return ""
         
         # Handle the case where result might be a dict or have different structure
-        if isinstance(result, dict) and "chunks" in result:
-            return str(result.get("chunks", "")).strip()
+        if isinstance(result, dict) and "text" in result:
+            return str(result.get("text", "")).strip()
         else:
             return str(result).strip()
