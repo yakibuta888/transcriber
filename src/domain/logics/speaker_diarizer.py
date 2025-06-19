@@ -11,7 +11,7 @@ class SpeakerDiarizer:
         )
         self.pipeline.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
 
-    def get_segments(self, audio_file: str, num_speakers: int | None = None, min_speakers: int | None = None, max_speakers: int | None = None):
+    def get_segments(self, audio: dict, num_speakers: int | None = None, min_speakers: int | None = None, max_speakers: int | None = None):
         """
         話者分離を実行し、区間情報を返す。
         - num_speakers: 話者数が分かっている場合に指定
@@ -25,7 +25,7 @@ class SpeakerDiarizer:
         if max_speakers is not None:
             diarization_args["max_speakers"] = max_speakers
 
-        diarization = self.pipeline(audio_file, **diarization_args)
+        diarization = self.pipeline(audio, **diarization_args)
 
         return [
             {

@@ -38,17 +38,16 @@ class WhisperTranscriber:
         )
 
 
-    def transcribe(self, wav_path: str, language: str = "ja"):
+    def transcribe(self, audio: dict, language: str = "ja"):
         generate_kwargs = {
             "language": language
         }
-        result = self.pipe(wav_path, generate_kwargs=generate_kwargs)
+        result = self.pipe(audio, generate_kwargs=generate_kwargs)
 
         if result is None:
-            return ""
+            return []
         
-        # Handle the case where result might be a dict or have different structure
-        if isinstance(result, dict) and "text" in result:
-            return str(result.get("text", "")).strip()
+        if isinstance(result, dict) and "chunks" in result:
+            return result["chunks"]
         else:
-            return str(result).strip()
+            return []

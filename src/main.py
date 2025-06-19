@@ -73,7 +73,11 @@ def show_detail_window(current_options):
         [sg.Button('OK'), sg.Button('キャンセル')]
     ]
     window = sg.Window('詳細オプション設定', layout, modal=True)
-    event, values = window.read()
+    result = window.read()
+    if result is None:
+        window.close()
+        return current_options
+    event, values = result
     if event == 'OK':
         # サブウィンドウで設定した値を返す
         updated = {
@@ -125,7 +129,10 @@ window = sg.Window('文字起こしApp', layout)
 # イベントループ
 task_running = False
 while True:
-    event, values = window.read(timeout=100)
+    result = window.read(timeout=100)
+    if result is None:
+        continue
+    event, values = result
     if event in (sg.WIN_CLOSED, '終了'):
         break
     
