@@ -3,6 +3,7 @@ import torchaudio
 
 from concurrent.futures import ThreadPoolExecutor
 
+from config import HUGGING_FACE_TOKEN
 from domain.common.progress_reporter import ProgressReporter
 from domain.exception.could_not_diarize_error import CouldNotDiarizeError
 from domain.common.get_models_dir import get_models_path
@@ -12,22 +13,31 @@ from domain.logics.speaker_diarizer import SpeakerDiarizer
 from domain.logics.whisper_large import WhisperTranscriber
 from settings import logger
 
+
 class LargeService:
     def __init__(self, audio_file: str, diarizer_model_id: str, whisper_model_id: str, hf_token: str):
-        self.audio_file = audio_file
-        self.diarizer_model_id = diarizer_model_id
-        self.whisper_model_id = whisper_model_id
-        self.hf_token = hf_token
-
         # 初期化時のバリデーションとデフォルト値設定
-        if not os.path.exists(audio_file):
+        if os.path.exists(audio_file):
+            self.audio_file = audio_file
+        else:
             raise FileNotFoundError(f"Audio file not found: {audio_file}")
-        if not diarizer_model_id:
+
+        if diarizer_model_id:
+            self.diarizer_model_id = diarizer_model_id
+        else:
             self.diarizer_model_id = "speaker-diarization-3.1"
-        if not whisper_model_id:
+
+        if whisper_model_id:
+            self.whisper_model_id = whisper_model_id
+        else:
             self.whisper_model_id = "whisper-large-v3"
-        if not hf_token:
-            self.hf_token = "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"
+
+        if hf_token:
+            self.hf_token = hf_token
+        elif HUGGING_FACE_TOKEN:
+            self.hf_token = HUGGING_FACE_TOKEN
+        else:
+            raise ValueError("Hugging Face token is required for accessing models.")
 
 
     def _estimate_diar_segments(self, audio: AudioLoader):
