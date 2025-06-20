@@ -3,14 +3,14 @@ import PySimpleGUI as sg
 import threading
 
 from application.services.transcribe_service import TranscribeService
-
+from domain.common.progress_reporter import ProgressReporter
 from settings import logger
 
 
 # --------------------------------------
 # 処理本体
 # --------------------------------------
-def task(window):
+def task(window, progress_reporter: ProgressReporter):
     window.write_event_value('-PROGRESS-', '処理開始')
     try:
         transcribe_service = TranscribeService(
@@ -21,7 +21,8 @@ def task(window):
         transcribe_service.transcribe_and_save(
             outdir=outdir,
             outname=outname,
-            option_args=option_args
+            option_args=option_args,
+            progress=progress_reporter
         )
     except ValueError as e:
         window.write_event_value('-ERROR-', 'モデル選択が不正です。管理者にお問い合わせください。')
@@ -120,7 +121,9 @@ layout = [
     [sg.Text('出力ファイル名', size=(15, 1)), sg.InputText('', key='-OUTNAME-')],
     [sg.Button('詳細オプション'), sg.Text('', key='-DETAIL_OPTIONS-')],
     [sg.Button('実行'), sg.Button('終了')],
-    [sg.Text('ログ', size=(5, 1)), sg.Multiline(size=(55, 5), key='-LOG-', disabled=True, autoscroll=True)]
+    [sg.Text('ログ', size=(15, 1)), sg.Multiline(size=(57, 5), key='-LOG-', disabled=True, autoscroll=True)],
+    [sg.ProgressBar(100, orientation='h', size=(50, 20), key='-BAR-')],
+    [sg.Text('', size=(60,1), key='-STATUS-')],
 ]
 
 # ウィンドウ生成
@@ -202,9 +205,12 @@ Hugging Face トークン: {detail_options.get('hf_token', '未設定')}
             'batch_size': int(batch_size) if batch_size else None,
             'fa2': fa2,
         }
-
-        threading.Thread(target=task, args=(window,), daemon=True).start()
         
+        # 進捗レポーターの初期化
+        progress_reporter = ProgressReporter(window, '-BAR-', '-STATUS-', '-LOG-')
+
+        threading.Thread(target=task, args=(window, progress_reporter), daemon=True).start()
+
     if event == '-PROGRESS-':
         progress_message = values['-PROGRESS-']
         if progress_message == '処理開始':

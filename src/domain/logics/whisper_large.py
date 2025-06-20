@@ -3,6 +3,8 @@ import torch
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 from transformers.pipelines import pipeline
 
+from domain.common.progress_reporter import ProgressReporter
+
 
 class WhisperTranscriber:
     def __init__(self, model: str, chunk_length_s: int = 15, batch_size: int = 8, flash_attention: bool = False):
@@ -38,16 +40,27 @@ class WhisperTranscriber:
         )
 
 
-    def transcribe(self, audio: dict, language: str = "ja"):
+    def transcribe(self, audio: dict, language: str = "ja", progress: ProgressReporter | None = None):
+        """
+        音声認識を実行し、進捗を報告する
+        - progress: UnifiedProgressReporterインスタンス（進捗報告用）
+        """
         generate_kwargs = {
             "language": language
         }
+        
+        # 進捗開始通知
+        if progress:
+            progress.update.transcription(0, "音声認識を開始")
+        
         result = self.pipe(audio, generate_kwargs=generate_kwargs)
 
         if result is None:
             return []
         
         if isinstance(result, dict) and "chunks" in result:
+            if progress:
+                progress.update.transcription(1, "音声認識が完了")
             return result["chunks"]
         else:
             return []
