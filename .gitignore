@@ -3,6 +3,7 @@
 ~$*
 src/models/*
 !src/models/__init__.py
+untracked/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
