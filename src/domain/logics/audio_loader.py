@@ -1,5 +1,7 @@
 import torch
 import torchaudio
+import noisereduce as nr
+import numpy as np
 
 from domain.common.progress_reporter import ProgressReporter
 
@@ -7,7 +9,7 @@ from domain.common.progress_reporter import ProgressReporter
 class AudioLoader:
     def __init__(self, path, progress: ProgressReporter | None = None):
         self._path = path
-        self._steps = 3  # 音声処理のステップ数（進捗表示用）
+        self._steps = 5  # 音声処理のステップ数（進捗表示用）
         
         if progress:
             progress.update.preprocessing(0, "音声ファイルを読み込み中...")
@@ -34,11 +36,30 @@ class AudioLoader:
         if waveform.dim() == 1:
             waveform = waveform.unsqueeze(0)  # (time,) → (1, time)
         
+        # Step 4: ピーク正規化（追加処理）
+        if progress:
+            progress.update.preprocessing(3, "ピーク正規化中...")
+        peak = waveform.abs().max()
+        if peak > 1e-6:  # ゼロ除算防止
+            waveform = waveform / peak
+        
+        # Step 5: RNNoiseによるノイズ除去（追加処理）
+        if progress:
+            progress.update.preprocessing(4, "ノイズ除去中...")
+        waveform_np = waveform.squeeze().numpy()
+        reduced = nr.reduce_noise(
+            y=waveform_np, 
+            sr=sample_rate, 
+            stationary=False,  # 非定常ノイズ対応
+            prop_decrease=1.0  # ノイズ100%除去
+        )
+        waveform = torch.from_numpy(reduced).unsqueeze(0).float()
+        
         self._waveform = waveform
         self._sample_rate = sample_rate
         
         if progress:
-            progress.update.preprocessing(3, "音声ファイルの読み込みが完了しました。")
+            progress.update.preprocessing(5, "音声ファイルの読み込みが完了しました。")
     
 
     @property
