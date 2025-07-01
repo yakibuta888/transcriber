@@ -23,8 +23,9 @@ class AudioEntity:
             waveform = waveform.unsqueeze(0)  # (time,) → (1, time) の2次元に変換
         elif waveform.dim() != 2:
             raise ValueError("Waveform must be a 1D or 2D tensor. Received: {}".format(waveform.dim()))
-        if waveform.shape[0] != num_channels:
-            raise ValueError("Waveform channels do not match num_channels. Expected: {}, Got: {}".format(num_channels, waveform.shape[0]))
+        actual_channels = waveform.size(0) if waveform.dim() > 1 else 1
+        if actual_channels != num_channels:
+            raise ValueError("Waveform channels do not match num_channels. Expected: {}, Got: {}".format(num_channels, actual_channels))
         if not isinstance(sample_rate, int) or sample_rate <= 0:
             raise ValueError("Sample rate must be a positive integer. Received: {}".format(sample_rate))
         if not isinstance(duration, (int, float)) or duration < 0:
@@ -76,12 +77,13 @@ class AudioEntity:
 
     def to_numpy(self):
         """numpy配列とサンプリングレートを返す（NumPyベースの音響処理ライブラリで追加処理を行うとき等に利用）"""
-        return self._waveform.squeeze().numpy(), self._sample_rate
+        waveform_cpu = self._waveform.cpu()
+        return waveform_cpu.squeeze().numpy(), self._sample_rate
 
 
     def for_whisper(self):
         """whisperパイプライン用（1次元numpy配列）"""
-        array = self._waveform.squeeze().numpy()  # (time,)の1次元
+        array = self._waveform.cpu().squeeze().numpy()  # (time,)の1次元
         return {"array": array, "sampling_rate": self._sample_rate}
     
 

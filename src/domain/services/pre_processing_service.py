@@ -12,7 +12,7 @@ class PreprocessingService:
     def __init__(self):
         self._stationary_processor = AudioProcessor()
         self._transient_processor = TransientNoiseReducer(
-            rnn_model_path=os.path.join("models", "CleanUNet", "exp", "DNS-large-full", "checkpoint", "pretrained.pkl")
+            rnn_model_path=os.path.join("src", "models", "CleanUNet", "exp", "DNS-large-full", "checkpoint", "pretrained.pkl")
         )
         self._enhancer = VocalEnhancer(
             noise_reduce=False,  # 非定常ノイズ除去はPreprocessingServiceで行うため無効化
@@ -21,7 +21,7 @@ class PreprocessingService:
         self._steps = list()  # 音声処理のステップ
     
 
-    def process(self, path, progress: ProgressReporter | None = None) -> AudioEntity:
+    def process(self, path: str, progress: ProgressReporter | None = None) -> AudioEntity:
         # Step 1: ファイル読み込みとリサンプリング、モノラル変換
         if progress:
             progress.update.preprocessing(0, "音声ファイルを読み込み中...")
@@ -65,7 +65,7 @@ class PreprocessingService:
             waveform=re_normalized_audio,
             sample_rate=raw_audio.sample_rate,
             duration=raw_audio.duration,
-            num_channels=re_normalized_audio.shape[0],
+            num_channels=re_normalized_audio.size(0) if re_normalized_audio.dim() > 1 else 1,
             processing_steps=self._steps,
             metadata={'source': raw_audio.path}
         )

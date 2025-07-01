@@ -8,10 +8,11 @@ from domain.common.progress_reporter import ProgressReporter
 
 class WhisperTranscriber:
     def __init__(self, model: str, chunk_length_s: int = 15, batch_size: int = 8, flash_attention: bool = False):
-        torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        torch_dtype = torch.float16 if self.device == "cuda" else torch.float32
         
         # attn_implementationの設定
-        if flash_attention:
+        if flash_attention and self.device == "cuda":
             attn_impl = "flash_attention_2"
         else:
             attn_impl = "sdpa"
@@ -22,8 +23,8 @@ class WhisperTranscriber:
             torch_dtype=torch_dtype,
             low_cpu_mem_usage=True,
             use_safetensors=True,
-            device_map="auto" if torch.cuda.is_available() else None,
-            attn_implementation=attn_impl if torch.cuda.is_available() else None
+            device_map="auto" if self.device == "cuda" else None,
+            attn_implementation=attn_impl if self.device == "cuda" else None
         )
 
         # pipeline の設定

@@ -6,16 +6,20 @@ from collections import deque
 
 
 class AudioProcessor:
-    def __init__(self, sample_rate=16000, n_fft=1024, hop_length=512):
+    def __init__(self, sample_rate=16000, n_fft=1024, hop_length=512, n_mels=80, fmax=8000):
         """
         音声処理プロセッサの初期化
         :param sample_rate: サンプリングレート (デフォルト16000Hz)
         :param n_fft: FFTサイズ (デフォルト1024)
         :param hop_length: フレームシフト (デフォルト512)
+        :param n_mels: メルバンド数 (デフォルト80)
+        :param fmax: 最大周波数 (デフォルト8000Hz)
         """
         self.sr = sample_rate
         self.n_fft = n_fft
         self.hop_length = hop_length
+        self.n_mels = n_mels  # 128から80に変更
+        self.fmax = fmax      # 8000Hzを明示的に設定
         self.noise_profile = None
         self.adaptive_params = {'beta': 1.5, 'noise_threshold': 0.3}
 
@@ -31,14 +35,25 @@ class AudioProcessor:
         magnitude = np.abs(stft)
         phase = np.angle(stft)
         
-        # ノイズ判定用特徴量抽出
-        spectral_flatness = librosa.feature.spectral_flatness(S=magnitude)
-        spectral_centroid = librosa.feature.spectral_centroid(S=magnitude, sr=self.sr)
-        spectral_bandwidth = librosa.feature.spectral_bandwidth(S=magnitude, sr=self.sr)
+        # メルスペクトログラム計算（fmaxを設定）
+        mel_spec = librosa.feature.melspectrogram(
+            y=audio,
+            sr=self.sr,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            n_mels=self.n_mels,  # 80に変更
+            fmax=self.fmax        # 8000Hzを設定
+        )
         
+        # ノイズ判定用特徴量抽出
+        spectral_flatness = librosa.feature.spectral_flatness(S=mel_spec)  # メルスペクトルを使用
+        spectral_centroid = librosa.feature.spectral_centroid(S=mel_spec, sr=self.sr)
+        spectral_bandwidth = librosa.feature.spectral_bandwidth(S=mel_spec, sr=self.sr)
+
         return {
             "magnitude": magnitude,
             "phase": phase,
+            "mel_spec": mel_spec,
             "flatness": spectral_flatness,
             "centroid": spectral_centroid,
             "bandwidth": spectral_bandwidth

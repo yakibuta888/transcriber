@@ -60,36 +60,75 @@ class TransientNoiseReducer:
             # モデルアーキテクチャの初期化
             model = CleanUNet()
             
+            # パスを絶対パスに変換し、存在確認
+            import os
+            model_path = os.path.abspath(model_path)
+            if not os.path.exists(model_path):
+                logger.error(f"モデルファイルが存在しません: {model_path}")
+                return None
+
             # .pklファイルから重みをロード
-            with open(model_path, 'rb') as f:
-                state_dict = pickle.load(f)
+            try:
+                with open(model_path, 'rb') as f:
+                    state_dict = pickle.load(f)
+            except Exception as e:
+                logger.warning(f"pickleロード失敗: {e}, torch.loadを試みます。")
+                # torch.loadを使用して状態辞書をロード
+                checkpoint = torch.load(model_path, map_location='cpu')
             
+                # 状態辞書の抽出
+                if 'model_state_dict' in checkpoint:
+                    state_dict = checkpoint['model_state_dict']
+                elif 'state_dict' in checkpoint:
+                    state_dict = checkpoint['state_dict']
+                else:
+                    state_dict = checkpoint
+        
             # 互換性のあるキー名に変換
             converted_state_dict = {}
             for k, v in state_dict.items():
                 if k.startswith('module.'):
                     k = k[7:]  # 'module.'プレフィックスを削除
+                if k.startswith('model.'):
+                    k = k[6:]  # 'model.'プレフィックスを削除
                 converted_state_dict[k] = v
             
-            model.load_state_dict(converted_state_dict)
-            model.eval()
+            # 厳密でないロードでキー不一致を許容
+            load_result = model.load_state_dict(converted_state_dict, strict=False)
+            
+            # キー不一致をログ出力
+            if load_result.missing_keys:
+                logger.warning(f"Missing keys: {load_result.missing_keys}")
+                for key in load_result.missing_keys:
+                    if key in model.state_dict:
+                        converted_state_dict[key] = model.state_dict()[key].clone()  # デフォルト値で補完
+            if load_result.unexpected_keys:
+                logger.warning(f"Unexpected keys: {load_result.unexpected_keys}")
+            
+            model = model.to(self.device).eval()
 
-            if quantize:
+            # 量子化処理
+            if quantize and self.device.type == 'cpu':
                 model = torch.quantization.quantize_dynamic(
                     model,
                     {nn.Conv1d, nn.Linear},
                     dtype=torch.qint8
                 )
+                logger.info(f"RNNモデル量子化成功: {model_path}")
+            elif quantize and self.device.type != "cpu":
+                logger.info("量子化はCPU環境でのみ有効です。")
 
+            logger.info(f"RNNモデルロード成功: {model_path} (device: {model.device})")
             return model
         except Exception as e:
-            logger.error(f"RNNモデルロードエラー: {e}")
+            logger.error(f"RNNモデルロードエラー: {e}", exc_info=True)
             return None
     
 
     def reduce(self, waveform: torch.Tensor) -> torch.Tensor:
         """ノイズタイプに基づく動的処理（並列化）"""
         try:
+            original_channels = self.get_num_channels(waveform)
             frames = self._segment_into_frames(waveform)
             processed_frames = []
 
@@ -105,9 +144,9 @@ class TransientNoiseReducer:
                 processed_frames = list(executor.map(process_frame, frames))
 
             processed_frames = torch.stack(processed_frames)
-            return self._reconstruct_from_frames(processed_frames)
+            return self._reconstruct_from_frames(processed_frames, original_channels)
         except Exception as e:
-            logger.error(f"ノイズ除去処理エラー@TransientNoiseReducer.reduce: {e}")
+            logger.error(f"ノイズ除去処理エラー@TransientNoiseReducer.reduce: {e}", exc_info=True)
             return waveform
     
 
@@ -173,6 +212,7 @@ class TransientNoiseReducer:
         base_ratio = base_ratios.get(noise_type, 0.5)
         final_ratio = 0.7 * base_ratio + 0.3 * dynamic_ratio.item()
         
+        logger.debug(f"ノイズタイプ: {noise_type}, RNN信頼度: {rnn_confidence:.2f}, RNNoise信頼度: {rnnoise_confidence:.2f}, 最終比率: {final_ratio:.2f}")
         # 4. ブレンド実行
         return final_ratio * rnn_output + (1 - final_ratio) * rnnoise_output
 
@@ -261,6 +301,7 @@ class TransientNoiseReducer:
         """CleanUNetを利用したRNN推論"""
         if self.rnn_model is None:
             # RNNモデルが利用できない場合はRNNoise処理にフォールバック
+            logger.warning("RNNモデルがロードされていません。RNNoise処理にフォールバックします。")
             return self._rnnoise_processing(frame, noise_type)
 
         try:
@@ -282,7 +323,7 @@ class TransientNoiseReducer:
         
     
     def _update_noise_floor(self, frame: np.ndarray):
-        """ノイズフロアの適応的更新（検索結果[1]に基づく）"""
+        """ノイズフロアの適応的更新"""
         frame_energy = np.mean(frame**2)
         self.energy_history.append(frame_energy)
         
@@ -304,12 +345,14 @@ class TransientNoiseReducer:
     def _adjust_prop_decrease(self, snr_db: float, noise_type: str) -> float:
         """
         SNRとノイズタイプに基づくprop_decrease調整
-        （検索結果[1][2]のアルゴリズム拡張）
+        :param snr_db: 推定SNR（dB単位）
+        :param noise_type: ノイズタイプ（'wind', 'transient', 'other'）
+        :return: 調整後のprop_decrease値（0.0-1.0）
         """
-        # 基本調整（検索結果[1]）
+        # 基本調整
         base_prop = 1.0 - (snr_db + 10) / 40 * 0.7
-        
-        # ノイズタイプ別補正（検索結果[2][6]）
+
+        # ノイズタイプ別補正
         correction_factors = {
             "wind": 0.9,    # 風ノイズは積極的除去
             "transient": 0.7,
@@ -328,7 +371,7 @@ class TransientNoiseReducer:
             snr_db = self._estimate_snr(frame_np)
             prop_decrease = self._adjust_prop_decrease(snr_db, noise_type)
             
-            # RNNoise処理（検索結果[2]）
+            # RNNoise処理
             reduced = nr.reduce_noise(
                 y=frame_np,
                 sr=self.sr,
@@ -341,25 +384,56 @@ class TransientNoiseReducer:
             logger.error(f"RNNoise処理エラー@TransientNoiseReducer._rnnoise_processing: {e}")
             return frame
     
+    
+    def get_num_channels(self, waveform: torch.Tensor) -> int:
+        """波形テンソルからチャンネル数を取得"""
+        if waveform.dim() == 1:
+            return 1
+        elif waveform.dim() == 2:
+            return waveform.size(0)
+        else:
+            raise ValueError(f"サポートされない波形の次元数: {waveform.dim()}")
 
+    
     def _segment_into_frames(self, waveform: torch.Tensor) -> torch.Tensor:
         """波形をフレーム分割（オーバーラップ付き、ベクトル化）"""
-        # shape: (num_frames, frame_size)
-        frames = waveform.unfold(0, self.frame_size, self.hop_length)
-        return frames
+        # 入力形状を正規化: [channels, samples]
+        if waveform.dim() == 1:
+            waveform = waveform.unsqueeze(0)  # [samples] -> [1, samples] 
+
+        # 時間次元（次元1）で展開
+        # 結果の形状: [channels, num_frames, frame_size]
+        frames = waveform.unfold(
+            dimension=1,
+            size=self.frame_size,
+            step=self.hop_length
+        )
+        
+        # フレームとチャンネルを統合: [num_frames * channels, frame_size]
+        return frames.permute(1, 0, 2).reshape(-1, self.frame_size)
 
 
-    def _reconstruct_from_frames(self, frames: torch.Tensor) -> torch.Tensor:
-        """フレームを再結合（オーバーラップ加算、ベクトル化）"""
-        num_frames = frames.size(0)
+    def _reconstruct_from_frames(self, frames: torch.Tensor, original_channels: int) -> torch.Tensor:
+        """フレームを再結合（オーバーラップ加算）"""
+        # フレームを元の構造に戻す: [num_frames * channels, frame_size] -> [channels, num_frames, frame_size]
+        num_frames = frames.size(0) // original_channels
+        frames = frames.view(num_frames, original_channels, self.frame_size).permute(1, 0, 2)
+        
+        # 出力バッファの初期化
         output_len = self.frame_size + self.hop_length * (num_frames - 1)
-        output = torch.zeros(output_len, device=frames.device)
+        output = torch.zeros(original_channels, output_len, device=frames.device)
+        
+        # ハニングウィンドウを準備
         window = torch.hann_window(self.frame_size, device=frames.device)
+        
+        # オーバーラップ加算処理
         for i in range(num_frames):
             start = i * self.hop_length
             end = start + self.frame_size
-            output[start:end] += frames[i] * window
-        return output
+            output[:, start:end] += frames[:, i, :] * window
+        
+        # 元の形状に戻す（モノラルの場合は次元を削減）
+        return output.squeeze(0) if original_channels == 1 else output
 
 
     def _is_transient_noise(self, frame: torch.Tensor) -> bool:
