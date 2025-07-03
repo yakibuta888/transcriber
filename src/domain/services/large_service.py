@@ -46,6 +46,7 @@ class LargeService:
             # 音声読み込みと前処理
             pre_processing_service = PreprocessingService()
             audio_entity = pre_processing_service.process(self.audio_file, progress=progress)
+            raise UserWarning("Preprocessing is complete. (debugging)")
 
             # diarizerモデルの準備
             try:

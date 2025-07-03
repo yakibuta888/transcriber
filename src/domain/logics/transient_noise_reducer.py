@@ -40,8 +40,16 @@ class TransientNoiseReducer:
         self.target_sr = 48000 # CleanUNetの要件
 
         # リサンプラー初期化
-        self.resampler = Resample(self.sr, self.target_sr)
-        self.inverse_resampler = Resample(self.target_sr, self.sr)
+        self.resampler = Resample(
+            orig_freq=self.sr,
+            new_freq=self.target_sr,
+            resampling_method='sinc_interp_kaiser'
+        )
+        self.inverse_resampler = Resample(
+            orig_freq=self.target_sr,
+            new_freq=self.sr,
+            resampling_method='sinc_interp_kaiser'
+        )
 
         # RNNモデルのロード&量子化
         self.rnn_model = self._load_rnn_model(rnn_model_path, quantize) if rnn_model_path else None
@@ -100,7 +108,7 @@ class TransientNoiseReducer:
             if load_result.missing_keys:
                 logger.warning(f"Missing keys: {load_result.missing_keys}")
                 for key in load_result.missing_keys:
-                    if key in model.state_dict:
+                    if key in model.state_dict():
                         converted_state_dict[key] = model.state_dict()[key].clone()  # デフォルト値で補完
             if load_result.unexpected_keys:
                 logger.warning(f"Unexpected keys: {load_result.unexpected_keys}")
@@ -118,7 +126,8 @@ class TransientNoiseReducer:
             elif quantize and self.device.type != "cpu":
                 logger.info("量子化はCPU環境でのみ有効です。")
 
-            logger.info(f"RNNモデルロード成功: {model_path} (device: {model.device})")
+            device_info = next(model.parameters()).device
+            logger.info(f"RNNモデルロード成功: {model_path} (device: {device_info})")
             return model
         except Exception as e:
             logger.error(f"RNNモデルロードエラー: {e}", exc_info=True)
@@ -137,7 +146,7 @@ class TransientNoiseReducer:
                     noise_type = self._classify_noise(frame)
                     return self._process_by_type(frame, noise_type)
                 except Exception as e:
-                    logger.error(f"フレーム処理エラー@TransientNoiseReducer.reduce.process_frame: {e}")
+                    logger.error(f"フレーム処理エラー@TransientNoiseReducer.reduce.process_frame: {e}", exc_info=True)
                     return frame  # エラー発生時は元のフレームを返す
 
             with ThreadPoolExecutor() as executor:
@@ -170,7 +179,7 @@ class TransientNoiseReducer:
 
         """ノイズタイプに応じた処理選択"""
         # ハイブリッド処理（移動平均法に基づく判定）
-        if self.use_hybrid and self.rnn_model:
+        if self.use_hybrid and self.rnn_model and False:
             rnn_output = self._rnn_model_inference(frame, noise_type)
             rnnoise_output = self._rnnoise_processing(frame, noise_type)
             blended = self._blend_outputs(
@@ -181,9 +190,10 @@ class TransientNoiseReducer:
             )
             return blended
         
+        noise_type = "wind"  # debug
         # 基本処理
         processor = self.method_map.get(noise_type, self._rnnoise_processing)
-        return processor(frame)
+        return processor(frame, noise_type)
 
 
     def _blend_outputs(self, 
@@ -266,7 +276,18 @@ class TransientNoiseReducer:
         # スペクトル相関（PyTorchで計算）
         orig_spec = torch.abs(torch.stft(original, n_fft=1024, return_complex=True))
         proc_spec = torch.abs(torch.stft(processed, n_fft=1024, return_complex=True))
-        spectral_corr = np.corrcoef(orig_spec.flatten().cpu(), proc_spec.flatten().cpu())[0, 1]
+        orig_flat = orig_spec.flatten().cpu().numpy()
+        proc_flat = proc_spec.flatten().cpu().numpy()
+        # 入力値のチェックと例外処理
+        if orig_flat.size == 0 or proc_flat.size == 0 or np.all(orig_flat == orig_flat[0]) or np.all(proc_flat == proc_flat[0]):
+            spectral_corr = 0.0
+        else:
+            try:
+                spectral_corr = np.corrcoef(orig_flat, proc_flat)[0, 1]
+                if np.isnan(spectral_corr):
+                    spectral_corr = 0.0
+            except Exception:
+                spectral_corr = 0.0
 
         # 残差ノイズの平坦度
         resid_flatness = librosa.feature.spectral_flatness(y=residual)[0].mean()
@@ -305,18 +326,41 @@ class TransientNoiseReducer:
             return self._rnnoise_processing(frame, noise_type)
 
         try:
-            # 1. 値の範囲制限
-            frame = torch.clamp(frame, -1.0, 1.0)
-            
-            # 2. サンプルレート変換
+            # 1. サンプルレート変換
             audio_48k = self.resampler(frame)
+            # チャンネル次元を追加 (batch, channels, time)
+            # frame: [frame_size] or [1, frame_size]
+            if audio_48k.dim() == 1:
+                # [frame_size] → [1, frame_size]
+                audio_48k = audio_48k.unsqueeze(0)
+            if audio_48k.dim() == 2:
+                # [1, frame_size] → [1, 1, frame_size]
+                input_tensor = audio_48k.unsqueeze(0)
+            elif audio_48k.dim() == 3:
+                # すでに[1, 1, frame_size]
+                input_tensor = audio_48k
+            else:
+                raise ValueError(f"Unexpected frame shape: {audio_48k.shape}")
 
-            # 3. 推論実行
+            # 2. 推論実行
             with torch.no_grad():
-                denoised_48k = self.rnn_model(audio_48k.unsqueeze(0).to(self.device))
+                denoised_48k = self.rnn_model(input_tensor.to(self.device))
+            # 3. CleanUNetの出力を取得
+            denoised_48k = denoised_48k.cpu()
+            # 3.5 出力値の異常チェック（±1.0を大きく超える値があれば警告）
+            if torch.max(torch.abs(denoised_48k)) > 5.0:
+                logger.warning(f"CleanUNet出力値が異常に大きい値を含みます (max={torch.max(torch.abs(denoised_48k)).item():.2f})。推論前のデータを返します。")
+                # return frame
+                # FIXME: ここでの処理は、異常値を含む場合に元のフレームを返すようにする
             
             # 4. 元のサンプルレートに変換
-            return self.inverse_resampler(denoised_48k.squeeze(0).cpu())
+            output = self.inverse_resampler(denoised_48k.squeeze(0))
+
+            # 5. 出力のNaN/infチェック
+            if torch.isnan(output).any() or torch.isinf(output).any():
+                logger.error("CleanUNet出力にNaNまたはinfが含まれています")
+                return frame
+            return output
         except Exception as e:
             logger.error(f"RNNモデル推論エラー@TransientNoiseReducer._rnn_model_inference: {e}")
             return frame
@@ -400,6 +444,15 @@ class TransientNoiseReducer:
         # 入力形状を正規化: [channels, samples]
         if waveform.dim() == 1:
             waveform = waveform.unsqueeze(0)  # [samples] -> [1, samples] 
+        channels, total_samples = waveform.shape
+
+        # パディング（端のフレームが足りない場合）
+        pad_len = (self.hop_length - (total_samples - self.frame_size) % self.hop_length) % self.hop_length
+        if pad_len > 0:
+            waveform = torch.nn.functional.pad(waveform, (0, pad_len))
+
+        # ウィンドウ関数
+        window = torch.hann_window(self.frame_size, device=waveform.device)
 
         # 時間次元（次元1）で展開
         # 結果の形状: [channels, num_frames, frame_size]
@@ -408,6 +461,7 @@ class TransientNoiseReducer:
             size=self.frame_size,
             step=self.hop_length
         )
+        frames = frames * window  # ウィンドウ適用
         
         # フレームとチャンネルを統合: [num_frames * channels, frame_size]
         return frames.permute(1, 0, 2).reshape(-1, self.frame_size)
@@ -427,13 +481,22 @@ class TransientNoiseReducer:
         window = torch.hann_window(self.frame_size, device=frames.device)
         
         # オーバーラップ加算処理
+        window_sum = torch.zeros(output_len, device=frames.device)
         for i in range(num_frames):
             start = i * self.hop_length
             end = start + self.frame_size
             output[:, start:end] += frames[:, i, :] * window
-        
-        # 元の形状に戻す（モノラルの場合は次元を削減）
-        return output.squeeze(0) if original_channels == 1 else output
+            window_sum[start:end] += window
+
+        # ゼロ割防止
+        window_sum = torch.clamp(window_sum, min=1e-8)
+        output = output / window_sum  # 正規化
+
+        pad_remove = self.frame_size - self.hop_length
+        if pad_remove > 0:
+            return output[..., :-pad_remove]  # パディング分を除去
+        else:
+            return output  # パディング不要
 
 
     def _is_transient_noise(self, frame: torch.Tensor) -> bool:
@@ -450,7 +513,7 @@ class TransientNoiseReducer:
         return max_diff > 0.3 or zero_crossings > 0.25
 
 
-    def _binary_mask(self, frame: torch.Tensor) -> torch.Tensor:
+    def _binary_mask(self, frame: torch.Tensor, noise_type: str | None = None) -> torch.Tensor:
         try:
             frame_np = frame.numpy()
             stft = librosa.stft(frame_np, n_fft=1024)
@@ -465,17 +528,28 @@ class TransientNoiseReducer:
             clean_frame = librosa.istft(clean_stft)
             return torch.from_numpy(clean_frame)
         except Exception as e:
-            logger.error(f"バイナリマスク処理エラー@TransientNoiseReducer._binary_mask: {e}")
+            logger.error(f"バイナリマスク処理エラー@TransientNoiseReducer._binary_mask: {e}", exc_info=True)
             return frame
     
 
-    def _calculate_adaptive_threshold(self, mag: np.ndarray) -> float:
-        """適応的閾値計算"""
-        # 周辺フレームのエネルギーを考慮
-        local_energy = np.mean([mag[max(0, i-2):i+2] for i in range(mag.shape[0])])
-
+    def _calculate_adaptive_threshold(self, mag: np.ndarray) -> np.ndarray:
+        """
+        適応的閾値計算
+        :param mag: STFT振幅スペクトル（shape: [freq_bins, frames] または [freq_bins]）
+        :return: 各周波数ビンごとの閾値（shape: [freq_bins]）
+        """
+        # mag: [freq_bins] または [freq_bins, frames]
+        # ここでは1フレーム分（[freq_bins,]）を想定
+        window_size = 5  # 例: 5点移動平均
+        half_win = window_size // 2
+        local_energy = np.zeros_like(mag)
+        for i in range(len(mag)):
+            start = max(0, i - half_win)
+            end = min(len(mag), i + half_win + 1)
+            local_energy[i] = np.mean(mag[start:end])
+        
         # ノイズフロア推定
         noise_floor = np.percentile(mag, 30)
-
-        return (noise_floor + 0.2 * local_energy).item()
-    
+        # 各ビンごとに閾値を計算
+        threshold = noise_floor + 0.2 * local_energy
+        return threshold

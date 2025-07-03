@@ -11,7 +11,8 @@ class AudioLoader:
     @staticmethod
     def load(path: str) -> RawAudio:
         waveform, sample_rate = torchaudio.load(path)
-        
+        waveform = AudioLoader.normalize_audio(waveform)
+
         # サンプリングレートを16kHzに変換
         if sample_rate != 16000:
             waveform = torchaudio.transforms.Resample(
@@ -34,6 +35,30 @@ class AudioLoader:
             sample_rate=sample_rate,
             path=path
         )
+
+
+    @staticmethod
+    def normalize_audio(waveform: torch.Tensor) -> torch.Tensor:
+        """
+        入力波形をfloat32型・[-1, 1]範囲に正規化する
+        :param waveform: [channels, samples] または [samples]
+        :return: 正規化済みfloat32テンソル
+        """
+        # 型変換
+        if waveform.dtype in [torch.int16, torch.int32, torch.int64]:
+            # int16の場合
+            if waveform.dtype == torch.int16:
+                waveform = waveform.float() / 32768.0
+            # int32の場合
+            elif waveform.dtype == torch.int32 or waveform.dtype == torch.int64:
+                waveform = waveform.float() / 2147483648.0
+        else:
+            waveform = waveform.float()
+
+        # [-1, 1]範囲にクリップ
+        waveform = torch.clamp(waveform, -1.0, 1.0)
+        return waveform
+
 
 @dataclass(frozen=False, eq=True)
 class RawAudio:

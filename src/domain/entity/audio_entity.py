@@ -19,11 +19,9 @@ class AudioEntity:
     def _validate(waveform: torch.Tensor, sample_rate: int, duration: float,
                  num_channels: int, processing_steps: list, metadata: dict):
         # 波形データの次元を確認
-        if waveform.dim() == 1:
-            waveform = waveform.unsqueeze(0)  # (time,) → (1, time) の2次元に変換
-        elif waveform.dim() != 2:
-            raise ValueError("Waveform must be a 1D or 2D tensor. Received: {}".format(waveform.dim()))
-        actual_channels = waveform.size(0) if waveform.dim() > 1 else 1
+        if waveform.dim() != 2:
+            raise ValueError("Waveform must be a 2D tensor. Received: {}".format(waveform.dim()))
+        actual_channels = waveform.size(0)
         if actual_channels != num_channels:
             raise ValueError("Waveform channels do not match num_channels. Expected: {}, Got: {}".format(num_channels, actual_channels))
         if not isinstance(sample_rate, int) or sample_rate <= 0:
@@ -50,6 +48,9 @@ class AudioEntity:
         :param metadata: 追加メタデータ
         :return: AudioEntityインスタンス
         """
+
+        if waveform.dim() == 1:
+            waveform = waveform.unsqueeze(0)  # (time,) → (1, time) の2次元に変換
 
         cls._validate(waveform, sample_rate, duration, num_channels, processing_steps, metadata)
 
