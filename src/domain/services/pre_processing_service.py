@@ -16,7 +16,7 @@ class PreprocessingService:
     def __init__(self):
         self._stationary_processor = AudioProcessor()
         self._transient_processor = TransientNoiseReducer(
-            rnn_model_path=os.path.join("src", "models", "CleanUNet", "exp", "DNS-large-full", "checkpoint", "pretrained.pkl")
+            rnn_model_path=os.path.join("src", "models", "mtl-mimic-voicebank")
         )
         self._enhancer = VocalEnhancer(
             noise_reduce=False,  # 非定常ノイズ除去はPreprocessingServiceで行うため無効化
@@ -67,9 +67,9 @@ class PreprocessingService:
             progress.update.preprocessing(3, "非定常ノイズ除去中...")
         denoised_audio = self._transient_processor.reduce(normalized_audio)
         self._steps.append("reduce_transient_noise")
-        torchaudio.save("03_after_transient_noise_reduction.wav", denoised_audio, raw_audio.sample_rate)  # デバッグ用
+        torchaudio.save("03_after_transient_noise_reduction.wav", denoised_audio.cpu(), raw_audio.sample_rate)  # デバッグ用
         plot_audio_analysis(
-            waveform=denoised_audio,
+            waveform=denoised_audio.cpu(),
             sr=raw_audio.sample_rate,
             filename="03_after_transient_noise_reduction_analysis.png"
         )  # デバッグ用

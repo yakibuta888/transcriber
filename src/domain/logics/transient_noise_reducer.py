@@ -7,6 +7,7 @@ import numpy as np
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
+from speechbrain.inference.separation import SepformerSeparation
 from torchaudio.transforms import Resample
 
 from models.CleanUNet.network import CleanUNet
@@ -14,13 +15,14 @@ from settings import logger
 
 
 class TransientNoiseReducer:
-    def __init__(self, 
-                 sample_rate=16000,
-                 rnn_model_path=None,
-                 use_hybrid=True,
-                 frame_size=2048,
-                 overlap=0.5,
-                 quantize=True):
+    def __init__(
+        self, 
+        sample_rate=16000,
+        rnn_model_path=None,
+        use_hybrid=True,
+        frame_size=2048,
+        overlap=0.5,
+    ):
         """
         非定常ノイズ除去の最適化実装
         
@@ -28,7 +30,6 @@ class TransientNoiseReducer:
         :param use_hybrid: ハイブリッド処理の有効化
         :param frame_size: 処理フレームサイズ
         :param overlap: フレームオーバーラップ率
-        :param quantize: 量子化の有無
         """
         self.sr = sample_rate
         self.frame_size = frame_size
@@ -37,23 +38,13 @@ class TransientNoiseReducer:
         self.energy_history = deque(maxlen=100)  # エネルギー履歴バッファ
         self.noise_floor = None  # ノイズフロアの初期化
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.target_sr = 48000 # CleanUNetの要件
-
-        # リサンプラー初期化
-        self.resampler = Resample(
-            orig_freq=self.sr,
-            new_freq=self.target_sr,
-            resampling_method='sinc_interp_kaiser'
-        )
-        self.inverse_resampler = Resample(
-            orig_freq=self.target_sr,
-            new_freq=self.sr,
-            resampling_method='sinc_interp_kaiser'
-        )
 
         # RNNモデルのロード&量子化
-        self.rnn_model = self._load_rnn_model(rnn_model_path, quantize) if rnn_model_path else None
-        
+        self.rnn_model = SepformerSeparation.from_hparams(
+            source=rnn_model_path,
+            run_opts={"device": self.device}
+        )
+
         # ノイズタイプ別処理マップ
         self.method_map = {
             "wind": self._rnn_model_inference,
@@ -62,78 +53,6 @@ class TransientNoiseReducer:
         }
 
     
-    def _load_rnn_model(self, model_path: str, quantize: bool) -> nn.Module | None:
-        """CleanUNetのRNNモデルをロード"""
-        try:
-            # モデルアーキテクチャの初期化
-            model = CleanUNet()
-            
-            # パスを絶対パスに変換し、存在確認
-            import os
-            model_path = os.path.abspath(model_path)
-            if not os.path.exists(model_path):
-                logger.error(f"モデルファイルが存在しません: {model_path}")
-                return None
-
-            # .pklファイルから重みをロード
-            try:
-                with open(model_path, 'rb') as f:
-                    state_dict = pickle.load(f)
-            except Exception as e:
-                logger.warning(f"pickleロード失敗: {e}, torch.loadを試みます。")
-                # torch.loadを使用して状態辞書をロード
-                checkpoint = torch.load(model_path, map_location='cpu')
-            
-                # 状態辞書の抽出
-                if 'model_state_dict' in checkpoint:
-                    state_dict = checkpoint['model_state_dict']
-                elif 'state_dict' in checkpoint:
-                    state_dict = checkpoint['state_dict']
-                else:
-                    state_dict = checkpoint
-        
-            # 互換性のあるキー名に変換
-            converted_state_dict = {}
-            for k, v in state_dict.items():
-                if k.startswith('module.'):
-                    k = k[7:]  # 'module.'プレフィックスを削除
-                if k.startswith('model.'):
-                    k = k[6:]  # 'model.'プレフィックスを削除
-                converted_state_dict[k] = v
-            
-            # 厳密でないロードでキー不一致を許容
-            load_result = model.load_state_dict(converted_state_dict, strict=False)
-            
-            # キー不一致をログ出力
-            if load_result.missing_keys:
-                logger.warning(f"Missing keys: {load_result.missing_keys}")
-                for key in load_result.missing_keys:
-                    if key in model.state_dict():
-                        converted_state_dict[key] = model.state_dict()[key].clone()  # デフォルト値で補完
-            if load_result.unexpected_keys:
-                logger.warning(f"Unexpected keys: {load_result.unexpected_keys}")
-            
-            model = model.to(self.device).eval()
-
-            # 量子化処理
-            if quantize and self.device.type == 'cpu':
-                model = torch.quantization.quantize_dynamic(
-                    model,
-                    {nn.Conv1d, nn.Linear},
-                    dtype=torch.qint8
-                )
-                logger.info(f"RNNモデル量子化成功: {model_path}")
-            elif quantize and self.device.type != "cpu":
-                logger.info("量子化はCPU環境でのみ有効です。")
-
-            device_info = next(model.parameters()).device
-            logger.info(f"RNNモデルロード成功: {model_path} (device: {device_info})")
-            return model
-        except Exception as e:
-            logger.error(f"RNNモデルロードエラー: {e}", exc_info=True)
-            return None
-    
-
     def reduce(self, waveform: torch.Tensor) -> torch.Tensor:
         """ノイズタイプに基づく動的処理（並列化）"""
         try:
@@ -319,48 +238,47 @@ class TransientNoiseReducer:
     
 
     def _rnn_model_inference(self, frame: torch.Tensor, noise_type: str) -> torch.Tensor:
-        """CleanUNetを利用したRNN推論"""
+        """
+        SpeechBrain SepFormerによるノイズ除去
+        :param frame: [1, samples] (float32, [-1, 1])
+        :return: ノイズ除去済み波形（torch.Tensor, shape: [1, samples]）
+        """
         if self.rnn_model is None:
             # RNNモデルが利用できない場合はRNNoise処理にフォールバック
             logger.warning("RNNモデルがロードされていません。RNNoise処理にフォールバックします。")
             return self._rnnoise_processing(frame, noise_type)
 
         try:
-            # 1. サンプルレート変換
-            audio_48k = self.resampler(frame)
-            # チャンネル次元を追加 (batch, channels, time)
-            # frame: [frame_size] or [1, frame_size]
-            if audio_48k.dim() == 1:
-                # [frame_size] → [1, frame_size]
-                audio_48k = audio_48k.unsqueeze(0)
-            if audio_48k.dim() == 2:
-                # [1, frame_size] → [1, 1, frame_size]
-                input_tensor = audio_48k.unsqueeze(0)
-            elif audio_48k.dim() == 3:
-                # すでに[1, 1, frame_size]
-                input_tensor = audio_48k
-            else:
-                raise ValueError(f"Unexpected frame shape: {audio_48k.shape}")
+            # 1. validate input shape
+            if frame.dim() != 1 and frame.dim() != 2:
+                raise ValueError(f"Unexpected frame shape: {frame.shape}. Expected 1D or 2D tensor.")
+            # [samples] -> [1, samples]
+            if frame.dim() == 1:
+                frame = frame.unsqueeze(0) 
+            # 1.5 チャンネル数のチェック
+            if frame.dim() == 2 and frame.size(0) != 1:
+                raise ValueError(f"Unexpected frame channels: {frame.size(0)}. Expected 1 channel (mono).")
+            # 1.6 サンプルレートのチェック
+            if self.sr != 16000:
+                raise ValueError(f"Unexpected sample rate: {self.sr}. Expected 16000 Hz for CleanUNet.")
 
             # 2. 推論実行
             with torch.no_grad():
-                denoised_48k = self.rnn_model(input_tensor.to(self.device))
-            # 3. CleanUNetの出力を取得
-            denoised_48k = denoised_48k.cpu()
-            # 3.5 出力値の異常チェック（±1.0を大きく超える値があれば警告）
-            if torch.max(torch.abs(denoised_48k)) > 5.0:
-                logger.warning(f"CleanUNet出力値が異常に大きい値を含みます (max={torch.max(torch.abs(denoised_48k)).item():.2f})。推論前のデータを返します。")
+                # 出力: [1, samples, n_sources]（通常n_sources=2）
+                est_sources = self.rnn_model.separate_batch(frame)
+                # 通常は最初のソースを返す（話者分離でなくノイズ除去用途なら）
+                denoised = est_sources[:, :, 0]
+
+            # 3 出力値の異常チェック（±1.0を大きく超える値があれば警告）
+            if torch.max(torch.abs(denoised)) > 5.0:
+                logger.warning(f"RNN推論の出力値が異常に大きい値を含みます (max={torch.max(torch.abs(denoised)).item():.2f})。推論前のデータを返します。")
                 # return frame
                 # FIXME: ここでの処理は、異常値を含む場合に元のフレームを返すようにする
-            
-            # 4. 元のサンプルレートに変換
-            output = self.inverse_resampler(denoised_48k.squeeze(0))
-
-            # 5. 出力のNaN/infチェック
-            if torch.isnan(output).any() or torch.isinf(output).any():
-                logger.error("CleanUNet出力にNaNまたはinfが含まれています")
+            # 3.5. 出力のNaN/infチェック
+            if torch.isnan(denoised).any() or torch.isinf(denoised).any():
+                logger.error("RNN出力にNaNまたはinfが含まれています")
                 return frame
-            return output
+            return denoised
         except Exception as e:
             logger.error(f"RNNモデル推論エラー@TransientNoiseReducer._rnn_model_inference: {e}")
             return frame
