@@ -38,9 +38,10 @@ class VocalEnhancer:
             melkwargs={'n_fft': 512, 'hop_length': 256, 'n_mels': 128}
         ).to(self.device)
         
-        # MVDRビームフォーミング初期化
-        self.mvdr = torchaudio.transforms.MVDR()
-        
+        if noise_reduce:
+            # MVDRビームフォーミング初期化
+            self.mvdr = torchaudio.transforms.MVDR()
+
         # オーディオプロセッシングチェーン
         self.board = Pedalboard([
             Compressor(threshold_db=-20, ratio=3),   # ダイナミクス制御
@@ -53,13 +54,16 @@ class VocalEnhancer:
         try:
             # データをGPUに転送
             waveform = waveform.to(self.device)
+
+            # STFT用window指定
+            window = torch.hann_window(512, device=waveform.device)
             
             # 1. ノイズ除去（MVDRビームフォーミング）
             if self.noise_reduce:
                 try:
-                    waveform = self._apply_mvdr_beamforming(waveform)
+                    waveform = self._apply_mvdr_beamforming(waveform, window)
                 except Exception as e:
-                    logger.error(f"MVDRビームフォーミングの適用に失敗しました@VocalEnhancer.enhance: {e}")
+                    logger.error(f"MVDRビームフォーミングの適用に失敗しました@VocalEnhancer.enhance: {e}", exc_info=True)
 
             # 2. GPU上でのピッチシフト
             if self.pitch_shift != 0:
@@ -75,7 +79,7 @@ class VocalEnhancer:
             
             # 3. ハーモニックブースト（GPU対応版）
             try:
-                waveform = self._gpu_harmonic_boost(waveform)
+                waveform = self._gpu_harmonic_boost(waveform, window)
             except Exception as e:
                 logger.error(f"ハーモニックブーストの適用に失敗しました@VocalEnhancer.enhance: {e}")
 
@@ -101,22 +105,38 @@ class VocalEnhancer:
             return waveform
 
 
-    def _apply_mvdr_beamforming(self, waveform: torch.Tensor) -> torch.Tensor:
+    def _apply_mvdr_beamforming(self, waveform: torch.Tensor, window: torch.Tensor) -> torch.Tensor:
         """MVDRビームフォーミングによるノイズ除去"""
-        # マルチチャンネル想定（モノラルを擬似マルチチャンネル化）
-        if waveform.dim() == 1:
-            waveform = waveform.unsqueeze(0).unsqueeze(0)  # [1, 1, T]
+        try:
+            # モノラル音声の場合はMVDRを適用せずに他の手法を使用
+            if waveform.dim() == 1 or (waveform.dim() == 2 and waveform.size(0) == 1):
+                logger.warning("MVDRはマルチチャンネル音声専用です。モノラル音声には他の手法を使用してください。")
+                return waveform
+            
+            # [channels, samples] → STFT: [channels, freq, time]
+            stft = torch.stft(waveform, n_fft=512, hop_length=256, window=window, return_complex=True)
+            # stft: [channels, freq, time] → [freq, channels, time]
+            stft = stft.permute(1, 0, 2)  # [freq, channels, time]
+            
+            # --- ここで音声マスクとノイズマスクを生成する ---
+            # マスクのshapeをspecgramに合わせる
+            # 例: 全通過マスク（実際は音声区間・ノイズ区間ごとに推定が必要）
+            freq, channels, time = stft.shape
+            mask_s = torch.ones(freq, time, device=stft.device)  # 音声マスク
+            mask_n = torch.zeros(freq, time, device=stft.device)  # ノイズマスク（例）
+            noise_frames = min(50, time // 4)  # 最初の部分をノイズ区間に
+            mask_n[:, :noise_frames] = 1.0
         
-        # STFT計算
-        stft = torch.stft(waveform, n_fft=512, hop_length=256, return_complex=True)
-        
-        # ノイズPSD推定（最初の100フレームをノイズサンプルとして使用）
-        noise_frames = stft[..., :100]
-        psd_noise = torch.einsum('...cft,...dft->...cdft', noise_frames, noise_frames.conj()).mean(-1)
-        
-        # MVDR適用
-        enhanced_stft = self.mvdr(stft, psd_noise)
-        return torch.istft(enhanced_stft, n_fft=512, hop_length=256)
+            # MVDR適用
+            enhanced_stft = self.mvdr(stft, mask_s, mask_n)
+            enhanced_stft = enhanced_stft.permute(1, 0, 2)  # [channels, freq, time]
+            # 参照チャンネル（通常は0番目）を取得
+            if enhanced_stft.dim() == 3:
+                enhanced_stft = enhanced_stft[0:1]  # [1, freq, time]
+            return torch.istft(enhanced_stft, n_fft=512, hop_length=256, window=window)
+        except Exception as e:
+            logger.error(f"MVDRビームフォーミングの適用に失敗しました@VocalEnhancer._apply_mvdr_beamforming: {e}", exc_info=True)
+            return waveform
 
 
     def _safe_detect_pitch(self, waveform: torch.Tensor, sample_rate: int) -> float:
@@ -139,10 +159,10 @@ class VocalEnhancer:
         return pitch
 
 
-    def _gpu_harmonic_boost(self, waveform: torch.Tensor) -> torch.Tensor:
+    def _gpu_harmonic_boost(self, waveform: torch.Tensor, window: torch.Tensor) -> torch.Tensor:
         """GPU対応版倍音強調処理（ピッチ検出の安定化を反映）"""
         # STFT計算
-        stft = torch.stft(waveform, n_fft=512, hop_length=256, return_complex=True)
+        stft = torch.stft(waveform, n_fft=512, hop_length=256, window=window, return_complex=True)
         mag = torch.abs(stft)
 
         # 安定化したピッチ検出
@@ -160,7 +180,7 @@ class VocalEnhancer:
         
         # 位相情報と結合
         stft_enhanced = mag * torch.exp(1j * torch.angle(stft))
-        return torch.istft(stft_enhanced, n_fft=512, hop_length=256)
+        return torch.istft(stft_enhanced, n_fft=512, hop_length=256, window=window)
 
 
     def _apply_professional_eq(self, audio: torch.Tensor) -> torch.Tensor:

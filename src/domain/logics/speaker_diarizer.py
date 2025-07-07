@@ -5,6 +5,42 @@ from pyannote.audio import Pipeline as DiarizationPipeline
 from domain.common.progress_reporter import ProgressReporter
 
 
+# FEATURE: PLDAモデルを利用して再学習と推論制度の向上を図る
+# # 1. 話者埋め込み抽出
+# embedding_model = PretrainedSpeakerEmbedding(
+#     "pyannote/embedding",
+#     device="cuda"
+# )
+
+# # 2. PLDAモデルの準備（事前学習済みor再学習）
+# plda_model = PLDA()
+# # カスタムデータで再学習する場合:
+# # plda_model.fit(embeddings, labels)
+
+# # カスタム話者分離パイプライン
+# class CustomDiarization(Pipeline):
+#     def __init__(self):
+#         super().__init__()
+        
+#     def apply(self, audio_file):
+#         # 音声分割処理
+#         segments = self._segment(audio_file)
+        
+#         # 埋め込み抽出
+#         embeddings = []
+#         for segment in segments:
+#             emb = embedding_model(segment)
+#             embeddings.append(emb)
+        
+#         # PLDAで類似度計算
+#         scores = plda_model.score(embeddings)
+        
+#         # クラスタリング（PLDAスコア使用）
+#         clusters = self._cluster(scores)
+        
+#         return self._assign_speakers(segments, clusters)
+
+
 class SpeakerDiarizer:
     def __init__(self, model: str, hf_token: str):
         self.pipeline = DiarizationPipeline.from_pretrained(
