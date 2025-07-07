@@ -1,0 +1,4 @@
+pull_request_templates:
+  - bug_fix_template.md
+  - feature_request_template.md
+  - documentation_update_template.md
