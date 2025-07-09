@@ -48,7 +48,7 @@ class WhisperTranscriber:
         """
         generate_kwargs = {
             "language": language,
-            "suppress_tokens": [-1],              # 特殊トークン抑制
+            # "suppress_tokens": [-1],              # 特殊トークン抑制
             # "temperature": (0.0, 0.2, 0.4),     # サンプリング多様性（任意）
         }
         
