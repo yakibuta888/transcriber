@@ -1,5 +1,5 @@
 import os
-import PySimpleGUI as sg
+import FreeSimpleGUI as sg
 import threading
 
 from application.services.transcribe_service import TranscribeService
