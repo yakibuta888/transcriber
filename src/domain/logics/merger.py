@@ -3,7 +3,7 @@ from domain.common.progress_reporter import ProgressReporter
 
 class ResultMerger:
     @staticmethod
-    def merge(asr_chunks, diar_segments, progress: ProgressReporter | None = None):
+    def merge(asr_chunks, diar_segments, progress: ProgressReporter | None = None) -> list[dict]:
         merged = []
         diar_segments = sorted(diar_segments, key=lambda x: x["start"])
         j = 0

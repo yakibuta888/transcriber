@@ -8,30 +8,41 @@ from domain.common.progress_reporter import ProgressReporter
 from domain.common.get_models_dir import get_models_path
 from domain.exception.could_not_diarize_error import CouldNotDiarizeError
 from domain.entity.audio_entity import AudioEntity
+from domain.interfaces.transcriber import ITranscriber
 from domain.logics.merger import ResultMerger
 from domain.logics.speaker_diarizer import SpeakerDiarizer
-from domain.logics.whisper_large import WhisperTranscriber
+from domain.logics.whisper_large import WhisperLargeTranscriber
 from domain.services.pre_processing_service import PreprocessingService
 from settings import logger
 
 
-class LargeService:
-    def __init__(self, audio_file: str, diarizer_model_id: str, whisper_model_id: str, hf_token: str):
+class LargeService(ITranscriber):
+    def __init__(self, audio_file: str, diarizer_model_id: str, whisper_model_id: str, hf_token: str | None = None):
         # 初期化時のバリデーションとデフォルト値設定
         if os.path.exists(audio_file):
             self.audio_file = audio_file
         else:
             raise FileNotFoundError(f"Audio file not found: {audio_file}")
 
-        if diarizer_model_id:
-            self.diarizer_model_id = diarizer_model_id
-        else:
-            self.diarizer_model_id = "speaker-diarization-3.1"
+        # diarizerモデルの準備
+        if not diarizer_model_id:
+            diarizer_model_id = "speaker-diarization-3.1"
+        try:
+            self.diarizer_model = get_models_path(os.path.join(diarizer_model_id, "config.yaml"))
+            logger.info(f"Using diarizer model: {self.diarizer_model}")
+        except FileNotFoundError as e:
+            self.diarizer_model = f"pyannote/{diarizer_model_id}"
+            logger.warning(f"Local diarizer model not found, using default: {self.diarizer_model}. \nError: {e}")
 
-        if whisper_model_id:
-            self.whisper_model_id = whisper_model_id
-        else:
-            self.whisper_model_id = "whisper-large-v3"
+        # whisper準備
+        if not whisper_model_id:
+            whisper_model_id = "whisper-large-v3"
+        try:
+            self.whisper_model = get_models_path(whisper_model_id)
+            logger.info(f"Using whisper model: {self.whisper_model}")
+        except FileNotFoundError as e:
+            self.whisper_model = f"openai/{whisper_model_id}"
+            logger.warning(f"Local whisper model not found, using default: {self.whisper_model}. \nError: {e}")
 
         if hf_token:
             self.hf_token = hf_token
@@ -41,27 +52,11 @@ class LargeService:
             raise ValueError("Hugging Face token is required for accessing models.")
 
 
-    def run(self, option_args: dict, progress: ProgressReporter | None = None):
+    def run(self, option_args: dict, progress: ProgressReporter | None = None) -> list[dict]:
         try:
             # 音声読み込みと前処理
             pre_processing_service = PreprocessingService()
-            audio_entity = pre_processing_service.process(self.audio_file, progress=progress)
-
-            # diarizerモデルの準備
-            try:
-                diarizer_model = get_models_path(os.path.join(self.diarizer_model_id, "config.yaml"))
-                logger.info(f"Using diarizer model: {diarizer_model}")
-            except FileNotFoundError as e:
-                diarizer_model = f"pyannote/{self.diarizer_model_id}"
-                logger.warning(f"Local diarizer model not found, using default: {diarizer_model}. \nError: {e}")
-
-            # whisper準備
-            try:
-                whisper_model = get_models_path(self.whisper_model_id)
-                logger.info(f"Using whisper model: {whisper_model}")
-            except FileNotFoundError as e:
-                whisper_model = f"openai/{self.whisper_model_id}"
-                logger.warning(f"Local whisper model not found, using default: {whisper_model}. \nError: {e}")
+            audio_entity: AudioEntity = pre_processing_service.process(self.audio_file, progress=progress)
 
             if progress:
                 progress.set_totals(
@@ -76,8 +71,8 @@ class LargeService:
             with ThreadPoolExecutor(max_workers=2) as executor:
                 # Whisper: セグメント全体を一括で音声認識
                 def asr_task():
-                    transcriber = WhisperTranscriber(
-                        whisper_model,
+                    transcriber = WhisperLargeTranscriber(
+                        self.whisper_model,
                         chunk_length_s=option_args.get("chunk_length", 15),
                         batch_size=option_args.get("batch_size", 8),
                         flash_attention=option_args.get("flash_attention", False),
@@ -86,7 +81,7 @@ class LargeService:
 
                 # Diarization: 話者分離
                 def diar_task():
-                    diarizer = SpeakerDiarizer(diarizer_model, self.hf_token)
+                    diarizer = SpeakerDiarizer(self.diarizer_model, self.hf_token)
                     return diarizer.get_segments(
                         audio_entity.for_pyannote(),
                         option_args.get("num_speakers", None),

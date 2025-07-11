@@ -2,6 +2,7 @@ import os
 import FreeSimpleGUI as sg
 import threading
 
+from application.factories.create_transcriber import create_transcriber
 from application.services.transcribe_service import TranscribeService
 from domain.common.progress_reporter import ProgressReporter
 from settings import logger
@@ -13,11 +14,12 @@ from settings import logger
 def task(window, progress_reporter: ProgressReporter):
     window.write_event_value('-PROGRESS-', '処理開始')
     try:
-        transcribe_service = TranscribeService(
+        transcriber = create_transcriber(
             audio_file=infile,
             model=model,
             hf_token=hf_token
         )
+        transcribe_service = TranscribeService(transcriber=transcriber)
         transcribe_service.transcribe_and_save(
             outdir=outdir,
             outname=outname,
