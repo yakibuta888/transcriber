@@ -53,7 +53,6 @@ class KotobaWhisperTranscriber:
 
         # None,空文字の値は渡さない
         pipe_kwargs = {k: v for k, v in pipe_kwargs.items() if v not in [None, ""]}
-        ']'
         
         # 進捗開始通知
         if progress:
@@ -67,8 +66,8 @@ class KotobaWhisperTranscriber:
                 result_list.append({
                     "speaker": str(chunk.get("speaker_id", "unknown")),
                     "text": str(chunk.get("text", "")),
-                    "start": str(chunk["timestamp"][0]) if "timestamp" in chunk else "",
-                    "end": str(chunk["timestamp"][1]) if "timestamp" in chunk else ""
+                    "start": float(chunk["timestamp"][0]) if "timestamp" in chunk else 0.0,
+                    "end": float(chunk["timestamp"][1]) if "timestamp" in chunk else 0.0
                 })
             
             if progress:

@@ -53,19 +53,19 @@ class LargeService(ITranscriber):
 
 
     def run(self, option_args: dict, progress: ProgressReporter | None = None) -> list[dict]:
+        if progress:
+            progress.set_totals(
+                preprocessing=6,
+                diarization=1,
+                transcription=1,
+                merge=1,  # 後で設定
+                output=1  # 後で設定
+            )
+
         try:
             # 音声読み込みと前処理
             pre_processing_service = PreprocessingService()
             audio_entity: AudioEntity = pre_processing_service.process(self.audio_file, progress=progress)
-
-            if progress:
-                progress.set_totals(
-                    preprocessing_steps=len(pre_processing_service.steps),
-                    diar_segments=1,
-                    asr_chunks=1,
-                    merge_segments=0,  # 後で設定
-                    output_lines=0  # 後で設定
-                )
 
             # 並列実行
             with ThreadPoolExecutor(max_workers=2) as executor:

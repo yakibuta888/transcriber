@@ -28,19 +28,19 @@ def task(window, progress_reporter: ProgressReporter):
         )
     except ValueError as e:
         window.write_event_value('-ERROR-', 'モデル選択が不正です。管理者にお問い合わせください。')
-        logger.error(f"Transcription failed. @main.task: {e}")
+        logger.error(f"Transcription failed. @main.task: {e}", exc_info=True)
         return
     except RuntimeError as e:
         window.write_event_value('-ERROR-', '音声認識に失敗しました。入力ファイルを確認してください。\n解決しない場合は管理者にお問い合わせください。')
-        logger.error(f"Transcription failed. @main.task: {e}")
+        logger.error(f"Transcription failed. @main.task: {e}", exc_info=True)
         return
     except FileNotFoundError as e:
         window.write_event_value('-ERROR-', '入力ファイルが見つかりません。ファイルパスを確認してください。\n解決しない場合は管理者にお問い合わせください。')
-        logger.error(f"File not found. @main.task: {e}")
+        logger.error(f"File not found. @main.task: {e}", exc_info=True)
         return
     except Exception as e:
         window.write_event_value('-ERROR-', f'予期しないエラーが発生しました。管理者にお問い合わせください。')
-        logger.error(f"Unexpected error occurred. @main.task: {e}")
+        logger.error(f"Unexpected error occurred. @main.task: {e}", exc_info=True)
     window.write_event_value('-PROGRESS-', '処理完了')
 
 

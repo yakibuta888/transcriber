@@ -1,0 +1,2 @@
+class CouldNotTranscribeError(Exception):
+    pass

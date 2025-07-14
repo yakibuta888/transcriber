@@ -22,4 +22,4 @@ class TranscribeService:
                 write_text_file(outdir, outname, results)
                 
         except Exception as e:
-            raise RuntimeError(f"Transcription failed: {e}")
+            raise RuntimeError(f"Transcription failed.@TranscribeService.transcribe_and_save: {e}")
