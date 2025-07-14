@@ -6,7 +6,7 @@ from transformers.pipelines import pipeline
 from domain.common.progress_reporter import ProgressReporter
 
 
-class WhisperTranscriber:
+class WhisperLargeTranscriber:
     def __init__(self, model: str, chunk_length_s: int = 15, batch_size: int = 8, flash_attention: bool = False):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         torch_dtype = torch.float16 if self.device == "cuda" else torch.float32
