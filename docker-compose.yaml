@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # frontend:
+  #   container_name: frontend-$PROJECT_NAME
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #     args:
+  #       - WORKDIR=$WORK_DIR
+  #       - USERNAME=$USER_NAME
+  #       - HOMEDIR=$HOME_DIR
+  #       - USERID=$USER_ID
+  #       - GROUPID=$GROUP_ID
+  #   ports:
+  #     - $IP:3000:3000
+  #   stdin_open: true
+  #   tty: true
+  #   env_file:
+  #     - ./.env
+  #     - ./frontend/frontend.env
+  #   volumes:
+  #     - logs:$WORK_DIR/logs
+  #     - ./frontend:$WORK_DIR:ro
+  #     - $WORK_DIR/node_modules
+  #   depends_on:
+  #     - backend
+
+  backend:
+    container_name: backend-$PROJECT_NAME
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        - WORKDIR=$WORK_DIR
+        - USERNAME=$USER_NAME
+        - HOMEDIR=$HOME_DIR
+        - USERID=$USER_ID
+        - GROUPID=$GROUP_ID
+    ports:
+      - $IP:8000:8000
+    tty: true
+    env_file:
+      - ./.env
+      - ./backend/backend.env
+    volumes:
+      - ./backend:$WORK_DIR:ro
+    # depends_on:
+    #   - database
+    #   - redis
+
+  # database:
+  #   image: mysql:8.0.29
+  #   platform: linux/x86_64
+  #   ports:
+  #     - $IP:3306:3306
+  #   env_file:
+  #     - ./mysql/mysql.env
+  #   volumes:
+  #     - db-store:/var/lib/mysql
+  #     - ./mysql/logs:/var/log/mysql
+  #     - ./mysql/initdb.d:/docker-entrypoint-initdb.d:ro
+
+  # redis:
+  #   image: redis:6.2.5
+  #   platform: linux/x86_64
+  #   ports:
+  #     - $IP:6379:6379
+  #   volumes:
+  #     - ./redis/data:/data
+  #     - ./redis/conf/redis.conf:/usr/local/etc/redis/redis.conf:ro
+
+networks:
+  default:
+    driver: bridge
+
+volumes:
+  logs:
+  db-store:

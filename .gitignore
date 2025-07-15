@@ -1,8 +1,8 @@
 *_org/
 *.xdw
 ~$*
-src/models/*
-!src/models/__init__.py
+backend/src/models/*
+!backend/src/models/__init__.py
 untracked/
 
 # Byte-compiled / optimized / DLL files
