@@ -43,8 +43,6 @@ services:
     env_file:
       - ./.env
       - ./backend/backend.env
-    volumes:
-      - ./backend:$WORK_DIR:ro
     # depends_on:
     #   - database
     #   - redis
