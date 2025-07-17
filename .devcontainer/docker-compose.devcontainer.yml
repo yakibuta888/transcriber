@@ -33,11 +33,11 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '10'
+          memory: 16g
+        reservations:
           cpus: '2'
           memory: 4g
-        reservations:
-          cpus: '1'
-          memory: 2g
     user: $USER_ID:$GROUP_ID
     entrypoint:
       - bash
@@ -46,6 +46,7 @@ services:
       - $IP:6080:80
     command: sleep infinity
     # command: gunicorn -k uvicorn.workers.UvicornWorker src.main:app --bind 0.0.0.0:8000 --workers 4
+    # network_mode: none
 
 volumes:
   pip-volume:

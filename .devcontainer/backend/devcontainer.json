@@ -1,8 +1,8 @@
 {
   "name": "backend-transcriber",
   "dockerComposeFile": [
-    "../docker-compose.yml",
-    "../.devcontainer/docker-compose.devcontainer.yml"
+    "../../docker-compose.yml",
+    "../docker-compose.devcontainer.yml"
   ],
   "remoteUser": "client",
   "service": "backend",
@@ -41,7 +41,7 @@
           "editor.formatOnSave": true
         },
         // pylance settings
-        "python.analysis.typeCheckingMode": "strict",
+        "python.analysis.typeCheckingMode": "basic",
         "python.analysis.stubPath": "./typings",
         "python.analysis.autoImportCompletions": false,
         "python.analysis.diagnosticSeverityOverrides": {

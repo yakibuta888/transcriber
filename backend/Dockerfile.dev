@@ -10,6 +10,7 @@ RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
 	apt-utils \
 	gcc \
+	curl \
 	build-essential \
 	sudo \
 	openssh-client \
@@ -58,5 +59,10 @@ RUN <<-EOF
 	useradd -m -s /bin/bash -d ${HOMEDIR} -k /etc/skel -u ${USERID} -g ${GROUPID} ${USERNAME}
 	echo ${USERNAME} ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/${USERNAME}
 	chmod 0440 /etc/sudoers.d/${USERNAME}
+	chown -R ${USERNAME}:${USERNAME} ${HOMEDIR}
 EOF
 USER ${USERNAME}
+
+# Rust(for DeepFilterNet)
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+ENV PATH="$PATH:${HOMEDIR}/.cargo/bin"
