@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # frontend:
+  #   build:
+  #     dockerfile: Dockerfile.dev
+  #     shm_size: 1gb
+  #   volumes:
+  #     - ./frontend:$WORK_DIR:cached
+  #     - vscode-extension-volume:$HOME_DIR/.vscode-server/extensions
+  #     - ./.devcontainer/devcontainer-entrypoint.sh:$HOME_DIR/etc/devcontainer-entrypoint.sh
+  #   user: $USER_ID:$GROUP_ID
+  #   entrypoint:
+  #     - bash
+  #     - $HOME_DIR/etc/devcontainer-entrypoint.sh
+  #   ports:
+  #     - $IP:3001:3001
+  #   environment:
+  #     - NODE_ENV=development
+  #   command: npm run dev
+
+  backend:
+    build:
+      dockerfile: Dockerfile.dev
+      shm_size: 1gb
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./backend:$WORK_DIR:cached
+      - pip-volume:$WORK_DIR/vendor
+      - vscode-extension-volume:$HOME_DIR/.vscode-server/extensions
+      - ./.devcontainer/devcontainer-entrypoint.sh:$HOME_DIR/etc/devcontainer-entrypoint.sh
+    deploy:
+      resources:
+        limits:
+          cpus: '10'
+          memory: 16g
+        reservations:
+          cpus: '2'
+          memory: 4g
+    user: $USER_ID:$GROUP_ID
+    entrypoint:
+      - bash
+      - $HOME_DIR/etc/devcontainer-entrypoint.sh
+    ports:
+      - $IP:6080:80
+    command: sleep infinity
+    # command: gunicorn -k uvicorn.workers.UvicornWorker src.main:app --bind 0.0.0.0:8000 --workers 4
+    # network_mode: none
+
+volumes:
+  pip-volume:
+  vscode-extension-volume: {}
