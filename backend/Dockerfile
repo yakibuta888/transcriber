@@ -83,13 +83,6 @@ RUN <<-EOF
 EOF
 USER ${USERNAME}
 
-# デバッグ用：ビルドコンテキストの内容を確認
-RUN echo "Build context contents:" && ls -la /tmp/build-context/ || echo "No build context mounted" && sleep 5
-
-# srcディレクトリの存在確認
-COPY --chown=${USERID}:${GROUPID} . ./temp/
-RUN ls -la ./temp/ && echo "Checking for src directory:" && ls -la ./temp/src/ || echo "src directory not found" && sleep 5
-
 # ビルドステージからコピーした依存関係とアプリケーションのソースコードをコピー
 COPY --chown=${USERID}:${GROUPID} src/ ./src/
 COPY --chown=${USERID}:${GROUPID} --from=builder ${WORKDIR}/vendor ./vendor/
