@@ -1,6 +1,6 @@
 import os
 
-from settings import logger
+from src.settings import logger
 
 def write_text_file(outdir: str, outname: str, contents: list[dict[str, str]]):
     try:

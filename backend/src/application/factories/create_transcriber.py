@@ -1,4 +1,4 @@
-from domain.interfaces.transcriber import ITranscriber
+from src.domain.interfaces.transcriber import ITranscriber
 
 
 def create_transcriber(audio_file: str, model: str, hf_token: str | None = None) -> ITranscriber:
@@ -12,7 +12,7 @@ def create_transcriber(audio_file: str, model: str, hf_token: str | None = None)
     """
     match model:
         case "whisper-large-v3":
-            from domain.services.large_service import LargeService
+            from src.domain.services.large_service import LargeService
             return LargeService(
                 audio_file=audio_file,
                 diarizer_model_id="speaker-diarization-3.1",
@@ -20,7 +20,7 @@ def create_transcriber(audio_file: str, model: str, hf_token: str | None = None)
                 hf_token=hf_token
             )
         case "kotoba-whisper-v2.2":
-            from domain.services.kotoba_whisper_service import KotobaWhisperService
+            from src.domain.services.kotoba_whisper_service import KotobaWhisperService
             return KotobaWhisperService(
                 audio_file=audio_file,
                 model_id="kotoba-whisper-v2.2",

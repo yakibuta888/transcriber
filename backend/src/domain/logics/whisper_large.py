@@ -3,7 +3,7 @@ import torch
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 from transformers.pipelines import pipeline
 
-from domain.common.progress_reporter import ProgressReporter
+from src.domain.interfaces.progress_reporter import IProgressReporter
 
 
 class WhisperLargeTranscriber:
@@ -41,7 +41,7 @@ class WhisperLargeTranscriber:
         )
 
 
-    def transcribe(self, audio: dict, language: str = "ja", progress: ProgressReporter | None = None):
+    def transcribe(self, audio: dict, language: str = "ja", progress: IProgressReporter | None = None):
         """
         音声認識を実行し、進捗を報告する
         - progress: UnifiedProgressReporterインスタンス（進捗報告用）

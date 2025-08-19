@@ -6,7 +6,7 @@ import torchaudio.transforms as T
 from pedalboard._pedalboard import Pedalboard
 from pedalboard import Compressor, Gain
 
-from settings import logger
+from src.settings import logger
 
 
 class VocalEnhancer:

@@ -3,17 +3,17 @@ import torchaudio
 
 from concurrent.futures import ThreadPoolExecutor
 
-from config import HUGGING_FACE_TOKEN
-from domain.common.progress_reporter import ProgressReporter
-from domain.common.get_models_dir import get_models_path
-from domain.exception.could_not_diarize_error import CouldNotDiarizeError
-from domain.entity.audio_entity import AudioEntity
-from domain.interfaces.transcriber import ITranscriber
-from domain.logics.merger import ResultMerger
-from domain.logics.speaker_diarizer import SpeakerDiarizer
-from domain.logics.whisper_large import WhisperLargeTranscriber
-from domain.services.pre_processing_service import PreprocessingService
-from settings import logger
+from src.config import HUGGING_FACE_TOKEN
+from src.domain.common.get_models_dir import get_models_path
+from src.domain.exception.could_not_diarize_error import CouldNotDiarizeError
+from src.domain.entity.audio_entity import AudioEntity
+from src.domain.interfaces.progress_reporter import IProgressReporter
+from src.domain.interfaces.transcriber import ITranscriber
+from src.domain.logics.merger import ResultMerger
+from src.domain.logics.speaker_diarizer import SpeakerDiarizer
+from src.domain.logics.whisper_large import WhisperLargeTranscriber
+from src.domain.services.pre_processing_service import PreprocessingService
+from src.settings import logger
 
 
 class LargeService(ITranscriber):
@@ -52,7 +52,7 @@ class LargeService(ITranscriber):
             raise ValueError("Hugging Face token is required for accessing models.")
 
 
-    def run(self, option_args: dict, progress: ProgressReporter | None = None) -> list[dict]:
+    def run(self, option_args: dict, progress: IProgressReporter | None = None) -> list[dict]:
         if progress:
             progress.set_totals(
                 preprocessing=6,

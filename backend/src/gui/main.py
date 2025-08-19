@@ -2,16 +2,17 @@ import os
 import FreeSimpleGUI as sg
 import threading
 
-from application.factories.create_transcriber import create_transcriber
-from application.services.transcribe_service import TranscribeService
-from domain.common.progress_reporter import ProgressReporter
-from settings import logger
+from src.domain.interfaces.progress_reporter import IProgressReporter
+from src.application.factories.create_transcriber import create_transcriber
+from src.application.services.transcribe_service import TranscribeService
+from src.domain.common.progress_reporter import ProgressReporter
+from src.settings import logger
 
 
 # --------------------------------------
 # 処理本体
 # --------------------------------------
-def task(window, progress_reporter: ProgressReporter):
+def task(window, progress_reporter: IProgressReporter):
     window.write_event_value('-PROGRESS-', '処理開始')
     try:
         transcriber = create_transcriber(
@@ -112,48 +113,49 @@ def show_detail_window(current_options):
 # メインウィンドウ
 # --------------------------------------
 
-# メインウィンドウのレイアウト
-sg.theme('Dark Blue 3')
+def main():
+    # メインウィンドウのレイアウト
+    sg.theme('Dark Blue 3')
 
-layout = [
-    [sg.Text('モデル', size=(15, 1)), sg.Combo(['whisper-large-v3', 'kotoba-whisper-v2.2'], default_value='whisper-large-v3', key='-MODEL-')],
-    [sg.Text('入力ファイル', size=(15, 1)), sg.InputText(key='-INFILE-'), sg.FileBrowse('ファイル選択')],
-    [sg.Checkbox('出力先を入力ファイルと同じフォルダにする', default=True, key='-SAMEFOLDER-', enable_events=True)],
-    [sg.Text('出力先フォルダ', size=(15, 1)), sg.InputText(key='-OUTDIR-', disabled=True), sg.FolderBrowse('フォルダ選択', target='-OUTDIR-', key='-OUTDIR_BROWSE-', disabled=True)],
-    [sg.Text('出力ファイル名', size=(15, 1)), sg.InputText('', key='-OUTNAME-')],
-    [sg.Button('詳細オプション'), sg.Text('', key='-DETAIL_OPTIONS-')],
-    [sg.Button('実行'), sg.Button('終了')],
-    [sg.Text('ログ', size=(15, 1)), sg.Multiline(size=(57, 5), key='-LOG-', disabled=True, autoscroll=True)],
-    [sg.ProgressBar(100, orientation='h', size=(50, 20), key='-BAR-')],
-    [sg.Text('', size=(60,1), key='-STATUS-')],
-]
+    layout = [
+        [sg.Text('モデル', size=(15, 1)), sg.Combo(['whisper-large-v3', 'kotoba-whisper-v2.2'], default_value='whisper-large-v3', key='-MODEL-')],
+        [sg.Text('入力ファイル', size=(15, 1)), sg.InputText(key='-INFILE-'), sg.FileBrowse('ファイル選択')],
+        [sg.Checkbox('出力先を入力ファイルと同じフォルダにする', default=True, key='-SAMEFOLDER-', enable_events=True)],
+        [sg.Text('出力先フォルダ', size=(15, 1)), sg.InputText(key='-OUTDIR-', disabled=True), sg.FolderBrowse('フォルダ選択', target='-OUTDIR-', key='-OUTDIR_BROWSE-', disabled=True)],
+        [sg.Text('出力ファイル名', size=(15, 1)), sg.InputText('', key='-OUTNAME-')],
+        [sg.Button('詳細オプション'), sg.Text('', key='-DETAIL_OPTIONS-')],
+        [sg.Button('実行'), sg.Button('終了')],
+        [sg.Text('ログ', size=(15, 1)), sg.Multiline(size=(57, 5), key='-LOG-', disabled=True, autoscroll=True)],
+        [sg.ProgressBar(100, orientation='h', size=(50, 20), key='-BAR-')],
+        [sg.Text('', size=(60,1), key='-STATUS-')],
+    ]
 
-# ウィンドウ生成
-window = sg.Window('文字起こしApp', layout)
+    # ウィンドウ生成
+    window = sg.Window('文字起こしApp', layout)
 
-# イベントループ
-task_running = False
-while True:
-    result = window.read(timeout=100)
-    if result is None:
-        continue
-    event, values = result
-    if event in (sg.WIN_CLOSED, '終了'):
-        break
-    
-    # 入力ファイル選択時 or チェックボックスON時に出力先フォルダを自動設定
-    if event in ('-INFILE-', '-SAMEFOLDER-'):
-        if values['-SAMEFOLDER-']:
-            infile = values['-INFILE-']
-            window['-OUTDIR-'].update(disabled=True)
-            window['-OUTDIR_BROWSE-'].update(disabled=True)
-        else:
-            window['-OUTDIR-'].update(disabled=False)
-            window['-OUTDIR_BROWSE-'].update(disabled=False)
+    # イベントループ
+    task_running = False
+    while True:
+        result = window.read(timeout=100)
+        if result is None:
+            continue
+        event, values = result
+        if event in (sg.WIN_CLOSED, '終了'):
+            break
+        
+        # 入力ファイル選択時 or チェックボックスON時に出力先フォルダを自動設定
+        if event in ('-INFILE-', '-SAMEFOLDER-'):
+            if values['-SAMEFOLDER-']:
+                infile = values['-INFILE-']
+                window['-OUTDIR-'].update(disabled=True)
+                window['-OUTDIR_BROWSE-'].update(disabled=True)
+            else:
+                window['-OUTDIR-'].update(disabled=False)
+                window['-OUTDIR_BROWSE-'].update(disabled=False)
 
-    if event == '詳細オプション':
-        detail_options = show_detail_window(detail_options)
-        detail_value = f"""句読点付与: {'ON' if detail_options.get('add_punctuation') else 'OFF'}
+        if event == '詳細オプション':
+            detail_options = show_detail_window(detail_options)
+            detail_value = f"""句読点付与: {'ON' if detail_options.get('add_punctuation') else 'OFF'}
 話者数: {detail_options.get('num_speakers', '自動')}
 話者数の最小値: {detail_options.get('min_speakers', '自動')}
 話者数の最大値: {detail_options.get('max_speakers', '自動')}
@@ -164,66 +166,69 @@ while True:
 Flash Attention 2: {'ON' if detail_options.get('fa2') else 'OFF'}
 Hugging Face トークン: {detail_options.get('hf_token', '未設定')}
 """
-        window['-DETAIL_OPTIONS-'].update(value=detail_value)
+            window['-DETAIL_OPTIONS-'].update(value=detail_value)
 
-    if event == '実行' and not task_running:
-        task_running = True
-        window['-LOG-'].update(value='処理を開始します...\n', append=True)
+        if event == '実行' and not task_running:
+            task_running = True
+            window['-LOG-'].update(value='処理を開始します...\n', append=True)
 
-        # 入力値取得
-        infile = values['-INFILE-']
-        model = values['-MODEL-']
-        # チェックボックスの状態で出力先フォルダを決定
-        if values['-SAMEFOLDER-']:
-            outdir = os.path.dirname(infile) if infile else os.path.dirname(os.path.abspath(__file__))
-        else:
-            outdir = values['-OUTDIR-']
-        outname = values['-OUTNAME-']
-        add_punctuation = detail_options['add_punctuation']
-        num_speakers = detail_options['num_speakers']
-        min_speakers = detail_options['min_speakers']
-        max_speakers = detail_options['max_speakers']
-        add_silence_start = detail_options['add_silence_start']
-        add_silence_end = detail_options['add_silence_end']
-        chunk_length = detail_options['chunk_length']
-        batch_size = detail_options['batch_size']
-        fa2 = detail_options['fa2']
-        hf_token = detail_options['hf_token']
+            # 入力値取得
+            infile = values['-INFILE-']
+            model = values['-MODEL-']
+            # チェックボックスの状態で出力先フォルダを決定
+            if values['-SAMEFOLDER-']:
+                outdir = os.path.dirname(infile) if infile else os.path.dirname(os.path.abspath(__file__))
+            else:
+                outdir = values['-OUTDIR-']
+            outname = values['-OUTNAME-']
+            add_punctuation = detail_options['add_punctuation']
+            num_speakers = detail_options['num_speakers']
+            min_speakers = detail_options['min_speakers']
+            max_speakers = detail_options['max_speakers']
+            add_silence_start = detail_options['add_silence_start']
+            add_silence_end = detail_options['add_silence_end']
+            chunk_length = detail_options['chunk_length']
+            batch_size = detail_options['batch_size']
+            fa2 = detail_options['fa2']
+            hf_token = detail_options['hf_token']
 
-        if not infile:
-            sg.popup_error('入力ファイルが指定されていません。')
-            task_running = False
-            continue
+            if not infile:
+                sg.popup_error('入力ファイルが指定されていません。')
+                task_running = False
+                continue
 
-        # オプション引数の設定
-        option_args = {
-            'add_punctuation': add_punctuation,
-            'num_speakers': int(num_speakers) if num_speakers else None,
-            'min_speakers': int(min_speakers) if min_speakers else None,
-            'max_speakers': int(max_speakers) if max_speakers else None,
-            'add_silence_start': float(add_silence_start) if add_silence_start else None,
-            'add_silence_end': float(add_silence_end) if add_silence_end else None,
-            'chunk_length': int(chunk_length) if chunk_length else 15,
-            'batch_size': int(batch_size) if batch_size else None,
-            'fa2': fa2,
-        }
+            # オプション引数の設定
+            option_args = {
+                'add_punctuation': add_punctuation,
+                'num_speakers': int(num_speakers) if num_speakers else None,
+                'min_speakers': int(min_speakers) if min_speakers else None,
+                'max_speakers': int(max_speakers) if max_speakers else None,
+                'add_silence_start': float(add_silence_start) if add_silence_start else None,
+                'add_silence_end': float(add_silence_end) if add_silence_end else None,
+                'chunk_length': int(chunk_length) if chunk_length else 15,
+                'batch_size': int(batch_size) if batch_size else None,
+                'fa2': fa2,
+            }
+            
+            # 進捗レポーターの初期化
+            progress_reporter = ProgressReporter(window, '-BAR-', '-STATUS-', '-LOG-')
+
+            threading.Thread(target=task, args=(window, progress_reporter), daemon=True).start()
+
+        if event == '-PROGRESS-':
+            progress_message = values['-PROGRESS-']
+            if progress_message == '処理開始':
+                window['-LOG-'].update(value='処理を開始しました...\n', append=True)
+            elif progress_message == '処理完了':
+                window['-LOG-'].update(value='処理が完了しました。\n', append=True)
+                task_running = False
         
-        # 進捗レポーターの初期化
-        progress_reporter = ProgressReporter(window, '-BAR-', '-STATUS-', '-LOG-')
-
-        threading.Thread(target=task, args=(window, progress_reporter), daemon=True).start()
-
-    if event == '-PROGRESS-':
-        progress_message = values['-PROGRESS-']
-        if progress_message == '処理開始':
-            window['-LOG-'].update(value='処理を開始しました...\n', append=True)
-        elif progress_message == '処理完了':
-            window['-LOG-'].update(value='処理が完了しました。\n', append=True)
+        if event == '-ERROR-':
+            error_message = values['-ERROR-']
+            window['-LOG-'].update(value=f'エラー: {error_message}\n', append=True)
             task_running = False
-    
-    if event == '-ERROR-':
-        error_message = values['-ERROR-']
-        window['-LOG-'].update(value=f'エラー: {error_message}\n', append=True)
-        task_running = False
 
-window.close()
+    window.close()
+
+if __name__ == '__main__':
+    main()

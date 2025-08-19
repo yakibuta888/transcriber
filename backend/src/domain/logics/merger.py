@@ -1,9 +1,9 @@
-from domain.common.progress_reporter import ProgressReporter
+from src.domain.interfaces.progress_reporter import IProgressReporter
 
 
 class ResultMerger:
     @staticmethod
-    def merge(asr_chunks, diar_segments, progress: ProgressReporter | None = None) -> list[dict]:
+    def merge(asr_chunks, diar_segments, progress: IProgressReporter | None = None) -> list[dict]:
         merged = []
         diar_segments = sorted(diar_segments, key=lambda x: x["start"])
         j = 0

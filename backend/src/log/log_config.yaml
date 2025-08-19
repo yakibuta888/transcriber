@@ -16,7 +16,7 @@ handlers:
     filename: './src/log/app.log'
     formatter: baseFormat
 loggers:
-  settings:
+  src.settings:
     level: DEBUG
     handlers: [console, file]
     propagate: False
