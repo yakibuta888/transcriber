@@ -16,10 +16,14 @@ handlers:
     filename: './src/log/app.log'
     formatter: baseFormat
 loggers:
-  src.settings:
+  app:
     level: DEBUG
     handlers: [console, file]
     propagate: False
+  cui:
+    level: INFO
+    handlers: [file]
+    propagate: False
 root:
-  level: DEBUG
+  level: WARNING
   handlers: [console]

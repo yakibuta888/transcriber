@@ -1,5 +1,7 @@
 import logging.config
 import os
+import re
+import sys
 import yaml
 from pathlib import Path
 
@@ -22,4 +24,11 @@ def setup_logging() -> None:
 
 
 setup_logging()
-logger = logging.getLogger(__name__)
+
+base_name = os.path.basename(sys.argv[0])
+is_cui = re.search(r'main_cui\.py$', base_name) is not None
+
+if is_cui:
+    logger = logging.getLogger("cui")
+else:
+    logger = logging.getLogger("app")

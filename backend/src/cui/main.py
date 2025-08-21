@@ -1,11 +1,30 @@
+import logging
 import os
 import argparse
+
+from rich.live import Live
 
 from src.application.factories.create_transcriber import create_transcriber
 from src.application.services.transcribe_service import TranscribeService
 from src.domain.common.progress_reporter_cui import ProgressReporterCUI
-from src.settings import logger
+from src.log.log_ui import display, RichDisplayHandler
+from src.settings import logger, setup_logging
 
+
+logger.handlers.clear()  # 既存のハンドラーをクリア
+setup_logging()  # ログ設定を再読み込み
+logger = logging.getLogger("src.cui")  # CUI用のロガーを取得
+def setup_cui_logging():
+    class MyLoggerFilter(logging.Filter):
+        def filter(self, record):
+            # 自分のlogger名だけ記録
+            return record.name == "src.cui"
+    # CUI用Live画面
+    rich_display_handler = RichDisplayHandler(display)
+    rich_display_handler.setFormatter(logging.Formatter("{message}", style="{"))
+    rich_display_handler.addFilter(MyLoggerFilter())  # フィルターを追加
+    logger.addHandler(rich_display_handler)
+    logger.propagate = False  # CUI用のハンドラーのみを使用するため、親ロガーへの伝播を無効化
 
 def main():
     parser = argparse.ArgumentParser(description="文字起こしアプリ（CUI版）")
@@ -49,6 +68,7 @@ def main():
 
     print("=== 文字起こし処理開始 ===")
     try:
+        # with Live(display.make_layout(), refresh_per_second=5) as live:
         transcriber = create_transcriber(
             audio_file=infile,
             model=model,
@@ -61,6 +81,7 @@ def main():
             option_args=option_args,
             progress=progress_reporter
         )
+            # live.update(display.make_layout())
         print("\n=== 処理完了 ===")
     except ValueError as e:
         logger.error(f"Transcription failed. @main: {e}", exc_info=True)
@@ -76,4 +97,5 @@ def main():
         print(f"予期しないエラーが発生しました。管理者にお問い合わせください。")
 
 if __name__ == "__main__":
+    setup_cui_logging()
     main()
