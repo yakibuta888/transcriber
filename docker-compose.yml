@@ -43,10 +43,10 @@ services:
         reservations:
           cpus: '4'
           memory: 8g
-          # devices:
-          #   - driver: nvidia
-          #     count: all
-              # capabilities: [gpu]
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     ports:
       - $IP:8000:8000
     tty: true

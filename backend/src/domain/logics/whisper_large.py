@@ -67,6 +67,8 @@ class WhisperLargeTranscriber:
                 return_tensors="pt"
             )
             input_features = inputs["input_features"].to(self.device)
+            # モデルの型に合わせてキャスト（重要！）
+            input_features = input_features.to(self.asr_model.dtype)
 
             with torch.no_grad():
                 # 音声認識を実行
