@@ -58,7 +58,7 @@ class LargeService(ITranscriber):
                 preprocessing=6,
                 diarization=1,
                 transcription=1,
-                merge=1,  # 後で設定
+                merge=0,  # 後で設定
                 output=1  # 後で設定
             )
 
@@ -73,6 +73,7 @@ class LargeService(ITranscriber):
                 def asr_task():
                     transcriber = WhisperLargeTranscriber(
                         self.whisper_model,
+                        diarize=option_args.get("diarize", True),
                         chunk_length_s=option_args.get("chunk_length", 15),
                         batch_size=option_args.get("batch_size", 8),
                         flash_attention=option_args.get("flash_attention", False),
@@ -100,6 +101,15 @@ class LargeService(ITranscriber):
                 raise CouldNotDiarizeError("No segments detected. Please check the audio file or models.")
 
             logger.debug(f"ASR segments: {len(asr_segments)}, Diarization segments: {len(diar_segments)}")
+            
+            if isinstance(asr_segments[0], str):
+                logger.debug("Transcription result is a single string, converting to segments.")
+                return [{
+                    "start": 0,
+                    "end": 0,
+                    "speaker": "unknown",
+                    "text": asr_segments[0]
+                }]
             
             # 話者情報付与前に正確な数を設定
             if progress:

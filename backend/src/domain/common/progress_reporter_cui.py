@@ -86,7 +86,7 @@ class ProgressReporterCUI(IProgressReporter):
             if len(self.log_buffer) > 1000:
                 self.log_buffer.pop(0)
             # ログは適宜print（or必要ならファイル保存等）
-            print(f"\n{log_message}")
+            # print(f"\n{log_message}")
         except Exception as e:
             print(f"Warning: Could not update log: {e}", file=sys.stderr)
 
