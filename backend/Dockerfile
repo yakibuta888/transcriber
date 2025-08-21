@@ -68,6 +68,9 @@ RUN sed -i -E 's/# (ja_JP.UTF-8)/\1/' /etc/locale.gen \
 ENV LANG ja_JP.UTF-8
 ENV LANGUAGE ja_JP:ja
 ENV LC_ALL ja_JP.UTF-8
+# JST
+RUN ln -fs /usr/share/zoneinfo/Asia/Tokyo /etc/localtime && \
+    dpkg-reconfigure -f noninteractive tzdata
 
 # セキュリティアップデートの適用
 RUN apt-get update && apt-get upgrade -y \
