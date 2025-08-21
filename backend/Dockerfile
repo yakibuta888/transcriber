@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1.4.1
-FROM python:3.12.11-slim as builder
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04 as builder
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 ARG WORKDIR
 ENV PATH=${WORKDIR}/vendor/bin:$PATH \
@@ -7,14 +9,22 @@ ENV PATH=${WORKDIR}/vendor/bin:$PATH \
 	PYTHONUSERBASE=${WORKDIR}/vendor
 WORKDIR ${WORKDIR}
 
-# Rust(for DeepFilterNet)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://ftp.jaist.ac.jp/pub/Linux/ubuntu/|g' /etc/apt/sources.list && \
+    sed -i 's|http://security.ubuntu.com/ubuntu|http://ftp.jaist.ac.jp/pub/Linux/ubuntu/|g' /etc/apt/sources.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
+	python3 \
+	python3-pip \
+	python3-venv \
     build-essential \
     git \
     curl \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
+
+RUN ln -s /usr/bin/python3 /usr/local/bin/python
+
+# Rust(for DeepFilterNet)
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH="$PATH:/root/.cargo/bin"
 
@@ -23,14 +33,20 @@ RUN pip install --upgrade pip \
     && pip install --no-cache-dir --target=${WORKDIR}/vendor -r requirements.txt
 
 
-FROM python:3.12.11-slim as production
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04 as production
 
 ENV DISPLAY=$DISPLAY
 ENV DEBIAN_FRONTEND=noninteractive
 
 # 必要なパッケージのインストール
 COPY packages.txt /tmp/packages.txt
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://ftp.jaist.ac.jp/pub/Linux/ubuntu/|g' /etc/apt/sources.list && \
+    sed -i 's|http://security.ubuntu.com/ubuntu|http://ftp.jaist.ac.jp/pub/Linux/ubuntu/|g' /etc/apt/sources.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
+	python3 \
+	python3-pip \
+	python3-venv \
+	git \
 	# 日本語環境
 	task-japanese \
 	locales \
@@ -43,6 +59,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	&& apt-get autoremove -y \
 	&& apt-get clean -y \
 	&& rm -rf /var/lib/apt/lists/*
+
+RUN ln -s /usr/bin/python3 /usr/local/bin/python
 
 # 日本語設定
 RUN sed -i -E 's/# (ja_JP.UTF-8)/\1/' /etc/locale.gen \

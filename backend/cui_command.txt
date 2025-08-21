@@ -1,0 +1,1 @@
+python src/cui/main.py --model whisper-large-v3 --infile ./files/noisy.mp3 --outname "lnx-noisy"

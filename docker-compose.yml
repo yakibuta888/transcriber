@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # frontend:
   #   container_name: frontend-$PROJECT_NAME
@@ -37,6 +35,18 @@ services:
         - HOMEDIR=$HOME_DIR
         - USERID=$USER_ID
         - GROUPID=$GROUP_ID
+    deploy:
+      resources:
+        limits:
+          cpus: '12'
+          memory: 32g
+        reservations:
+          cpus: '4'
+          memory: 8g
+          # devices:
+          #   - driver: nvidia
+          #     count: all
+              # capabilities: [gpu]
     ports:
       - $IP:8000:8000
     tty: true
