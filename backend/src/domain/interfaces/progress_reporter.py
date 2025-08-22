@@ -17,6 +17,14 @@ class IProgressReporter(ABC):
         pass
 
     @abstractmethod
+    def set_transcribe_total(self, transcribe_segments):
+        pass
+
+    @abstractmethod
+    def set_diarization_total(self, diarization_segments):
+        pass
+
+    @abstractmethod
     def clear_log(self):
         pass
 

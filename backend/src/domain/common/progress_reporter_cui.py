@@ -75,6 +75,12 @@ class ProgressReporterCUI(IProgressReporter):
 
     def set_merge_total(self, merge_segments):
         self.totals['merge'] = merge_segments
+    
+    def set_transcribe_total(self, transcribe_segments):
+        self.totals['transcription'] = transcribe_segments
+    
+    def set_diarization_total(self, diarization_segments):
+        self.totals['diarization'] = diarization_segments
 
     def _add_log(self, message):
         try:

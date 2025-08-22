@@ -44,14 +44,16 @@ class WhisperLargeTranscriber:
             )
 
 
-    def transcribe(self, audio: dict, language: str = "ja", progress: IProgressReporter | None = None) -> list[dict] | list[str]:
+    def transcribe(self, audio: dict, language: str = "ja", steps_info: dict | None = None) -> list[dict] | list[str]:
         """
         音声認識を実行し、進捗を報告する
-        - progress: UnifiedProgressReporterインスタンス（進捗報告用）
+        - steps_info: 進捗情報を含む辞書。例: {"total": 10, "current": 0, "detail": "/10:音声認識中..."}
         """
-        # 進捗開始通知
-        if progress:
-            progress.update.transcription(0, "音声認識を開始")
+        if steps_info:
+            detail: str = str(steps_info["current"]) + steps_info["detail"]
+            print(detail, end='', flush=True)
+            if steps_info["current"] == steps_info["total"]:
+                print()
 
         if self.diarize:
             generate_kwargs = {
@@ -75,21 +77,18 @@ class WhisperLargeTranscriber:
                 generated_ids = self.asr_model.generate(
                     input_features,
                     language=language,
-                    # max_new_tokens=1024,    # 長い場合はここを調整
+                    early_stopping=False,
                 )
             
             # 文字起こし結果
-            result = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-
-        if progress:
-            progress.update.transcription(1, "音声認識が完了")
+            result = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
 
         if result is None:
             return []
         
         if self.diarize and isinstance(result, dict) and "chunks" in result:
             return result["chunks"]
-        elif isinstance(result, str):
-            return [result]
+        elif isinstance(result, list):
+            return result
         else:
             raise CouldNotTranscribeError("音声認識に失敗しました。結果が不正です。@WhisperLargeTranscriber.transcribe")
