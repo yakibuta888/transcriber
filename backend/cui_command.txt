@@ -1,1 +1,1 @@
-python src/cui/main_cui.py --model whisper-large-v3 --infile ./files/noisy.mp3 --outname "lnx-noisy" --diarize
+python src/cui/main_cui.py --model whisper-large-v3 --infile ./files/test11-16m.mp3 --outname "lnx-test11-16m" --diarize

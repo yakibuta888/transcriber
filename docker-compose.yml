@@ -38,11 +38,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '12'
-          memory: 32g
+          cpus: '16'
+          memory: 64g
         reservations:
-          cpus: '4'
-          memory: 8g
+          cpus: '8'
+          memory: 16g
           devices:
             - driver: nvidia
               count: all

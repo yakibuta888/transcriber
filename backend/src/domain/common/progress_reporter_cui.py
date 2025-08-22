@@ -60,7 +60,7 @@ class ProgressReporterCUI(IProgressReporter):
         bar_length = 50
         filled_length = int(round(bar_length * percent / 100))
         bar = '=' * filled_length + '-' * (bar_length - filled_length)
-        print(f"\r[{bar}] {percent:.1f}% | {status_text}", end='', flush=True)
+        print(f"\r[{bar}] {percent:.1f}% | {status_text}", end='\n', flush=False)
         if percent >= 100:
             print('')  # 改行
 
