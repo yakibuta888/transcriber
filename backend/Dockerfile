@@ -46,6 +46,7 @@ RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://ftp.jaist.ac.jp/pub/Linux
 	python3 \
 	python3-pip \
 	python3-venv \
+	vim \
 	git \
 	# 日本語環境
 	task-japanese \
