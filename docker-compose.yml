@@ -18,7 +18,7 @@ services:
   #     - ./.env
   #     - ./frontend/frontend.env
   #   volumes:
-  #     - logs:$WORK_DIR/logs
+  #     - frontend-logs:$WORK_DIR/logs
   #     - ./frontend:$WORK_DIR:ro
   #     - $WORK_DIR/node_modules
   #   depends_on:
@@ -35,6 +35,8 @@ services:
         - HOMEDIR=$HOME_DIR
         - USERID=$USER_ID
         - GROUPID=$GROUP_ID
+    volumes:
+      - backend-logs:$WORK_DIR/src/logs
     deploy:
       resources:
         limits:
@@ -82,6 +84,7 @@ networks:
   default:
     driver: bridge
 
-# volumes:
-  # logs:
+volumes:
+  backend-logs:
+  # frontend-logs:
   # db-store:

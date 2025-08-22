@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 CWD: Path = Path(__file__).resolve().parent
-LOG_CONFIG_PATH: str = os.path.normpath(os.path.join(CWD, "log/log_config.yaml"))
+LOG_CONFIG_PATH: str = os.path.normpath(os.path.join(CWD, "logs/log_config.yaml"))
 
 
 class CustomLoguru:
