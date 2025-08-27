@@ -51,7 +51,7 @@ class WhisperLargeTranscriber:
         """
         if steps_info:
             detail: str = str(steps_info["current"]) + steps_info["detail"]
-            print(detail, end='', flush=True)
+            print('\r' + detail, end='', flush=True)
             if steps_info["current"] == steps_info["total"]:
                 print()
 
