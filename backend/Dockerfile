@@ -106,8 +106,9 @@ EOF
 USER ${USERNAME}
 
 # ビルドステージからコピーした依存関係とアプリケーションのソースコードをコピー
-COPY --chown=${USERID}:${GROUPID} src/ ./src/
+COPY --chown=${USERID}:${GROUPID} .cache/ ${HOMEDIR}/.cache/
 COPY --chown=${USERID}:${GROUPID} --from=builder ${WORKDIR}/vendor ./vendor/
+COPY --chown=${USERID}:${GROUPID} src/ ./src/
 
 # 環境変数の設定
 # Pythonがpycファイルとdiscへの書き込みを行わないようにする
@@ -115,8 +116,10 @@ ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
 # token
-ARG HUGGING_FACE_TOKEN
-ENV HUGGING_FACE_TOKEN=${HUGGING_FACE_TOKEN}
+ARG HUGGINGFACE_TOKEN
+ENV HUGGING_FACE_TOKEN=${HUGGINGFACE_TOKEN}
+ENV HF_HUB_OFFLINE=1
+ENV PYANNOTE_CACHE=${WORKDIR}/src/models/pyannote
 
 # アプリケーションの起動コマンド
 CMD ["sleep", "infinity"]

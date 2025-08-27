@@ -28,7 +28,7 @@ class LargeService(ITranscriber):
         if not diarizer_model_id:
             diarizer_model_id = "speaker-diarization-3.1"
         try:
-            self.diarizer_model = get_models_path(os.path.join(diarizer_model_id, "config.yaml"))
+            self.diarizer_model = get_models_path(os.path.join("pyannote", diarizer_model_id, "config.yaml"))
             logger.info(f"Using diarizer model: {self.diarizer_model}")
         except FileNotFoundError as e:
             self.diarizer_model = f"pyannote/{diarizer_model_id}"

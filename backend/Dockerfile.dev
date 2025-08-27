@@ -76,3 +76,6 @@ USER ${USERNAME}
 # Rust(for DeepFilterNet)
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH="$PATH:${HOMEDIR}/.cargo/bin"
+
+ENV HF_HUB_OFFLINE=1
+ENV PYANNOTE_CACHE=${WORKDIR}/src/models/pyannote

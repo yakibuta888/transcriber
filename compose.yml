@@ -1,3 +1,8 @@
+networks:
+  default:
+    driver: bridge
+  net_i:
+    internal: true
 services:
   # frontend:
   #   container_name: frontend-$PROJECT_NAME
@@ -25,7 +30,10 @@ services:
   #     - backend
 
   backend:
-    container_name: backend-$PROJECT_NAME
+    image: $PROJECT_NAME
+    container_name: app-$PROJECT_NAME
+    networks:
+      - net_i
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -35,7 +43,7 @@ services:
         - HOMEDIR=$HOME_DIR
         - USERID=$USER_ID
         - GROUPID=$GROUP_ID
-        - HUGGING_FACE_TOKEN=$HUGGING_FACE_TOKEN
+        - HUGGINGFACE_TOKEN=$HUGGING_FACE_TOKEN
     volumes:
       - backend-logs:$WORK_DIR/src/logs
     deploy:
@@ -50,8 +58,8 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    ports:
-      - $IP:8000:8000
+    # ports:
+    #   - $IP:8000:8000
     tty: true
     env_file:
       - ./.env
@@ -80,10 +88,6 @@ services:
   #   volumes:
   #     - ./redis/data:/data
   #     - ./redis/conf/redis.conf:/usr/local/etc/redis/redis.conf:ro
-
-networks:
-  default:
-    driver: bridge
 
 volumes:
   backend-logs:
