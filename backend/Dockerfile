@@ -114,7 +114,9 @@ COPY --chown=${USERID}:${GROUPID} --from=builder ${WORKDIR}/vendor ./vendor/
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
+# token
+ARG HUGGING_FACE_TOKEN
+ENV HUGGING_FACE_TOKEN=${HUGGING_FACE_TOKEN}
+
 # アプリケーションの起動コマンド
-# CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "src.main:app", "--bind", "0.0.0.0:8000", "--workers", "4"]
-# CMD ["python", "src/main.py"]
 CMD ["sleep", "infinity"]

@@ -35,6 +35,7 @@ services:
         - HOMEDIR=$HOME_DIR
         - USERID=$USER_ID
         - GROUPID=$GROUP_ID
+        - HUGGING_FACE_TOKEN=$HUGGING_FACE_TOKEN
     volumes:
       - backend-logs:$WORK_DIR/src/logs
     deploy:
