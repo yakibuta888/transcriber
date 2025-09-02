@@ -54,10 +54,11 @@ services:
         reservations:
           cpus: '8'
           memory: 16g
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+          # compose up(start)で実行する場合は、下記のコメントアウトを外す
+          # devices:
+          #   - driver: nvidia
+          #     count: all
+          #     capabilities: [gpu]
     # ports:
     #   - $IP:8000:8000
     tty: true

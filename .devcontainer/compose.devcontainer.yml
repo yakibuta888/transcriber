@@ -20,6 +20,8 @@ services:
   #   command: npm run dev
 
   backend:
+    networks:
+      - default
     build:
       dockerfile: Dockerfile.dev
       shm_size: 1gb
