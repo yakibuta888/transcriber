@@ -11,6 +11,11 @@ from pathlib import Path
 
 CWD: Path = Path(__file__).resolve().parent
 LOG_CONFIG_PATH: str = os.path.normpath(os.path.join(CWD, "logs/log_config.yaml"))
+# DeepFilterNetのバージョンを定数または環境変数で管理
+DEEPFILTERNET_VERSION = os.environ.get("DEEPFILTERNET_VERSION", "0.5.6")
+DEEPFILTERNET_LOGGER_PATH = Path(
+    f"src/models/DeepFilterNet-{DEEPFILTERNET_VERSION}/DeepFilterNet/df/logger.py"
+)
 
 
 class CustomLoguru:
@@ -25,7 +30,7 @@ class CustomLoguru:
     def _patch_deepfilternet_logger(self):
         try:
             # DeepFilterNetのloggerをimport
-            logger_path = Path("src/models/DeepFilterNet-0.5.6/DeepFilterNet/df/logger.py")
+            logger_path = DEEPFILTERNET_LOGGER_PATH
             spec = importlib.util.spec_from_file_location("df.logger", logger_path)
             if spec is None or spec.loader is None:
                 raise ImportError(f"Could not load spec or loader for {logger_path}")

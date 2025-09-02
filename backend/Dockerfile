@@ -121,5 +121,8 @@ ENV HUGGING_FACE_TOKEN=${HUGGINGFACE_TOKEN}
 ENV HF_HUB_OFFLINE=1
 ENV PYANNOTE_CACHE=${WORKDIR}/src/models/pyannote
 
+# DeepFilterNetのバージョンを指定
+ENV DEEPFILTERNET_VERSION=0.5.6
+
 # アプリケーションの起動コマンド
 CMD ["sleep", "infinity"]
