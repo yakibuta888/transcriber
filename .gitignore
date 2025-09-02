@@ -3,6 +3,7 @@
 ~$*
 backend/src/models/*
 !backend/src/models/__init__.py
+!backend/src/models/patches
 untracked/
 
 # Byte-compiled / optimized / DLL files
