@@ -2,7 +2,7 @@ import torch
 
 from pyannote.audio import Pipeline as DiarizationPipeline
 
-from domain.common.progress_reporter import ProgressReporter
+from src.domain.interfaces.progress_reporter import IProgressReporter
 
 
 # FEATURE: PLDAモデルを利用して再学習と推論制度の向上を図る
@@ -49,7 +49,7 @@ class SpeakerDiarizer:
         )
         self.pipeline.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
 
-    def get_segments(self, audio: dict, num_speakers: int | None = None, min_speakers: int | None = None, max_speakers: int | None = None, progress: ProgressReporter | None = None):
+    def get_segments(self, audio: dict, num_speakers: int | None = None, min_speakers: int | None = None, max_speakers: int | None = None, progress: IProgressReporter | None = None):
         """
         話者分離を実行し、区間情報を返す。
         - num_speakers: 話者数が分かっている場合に指定

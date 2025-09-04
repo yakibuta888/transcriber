@@ -1,13 +1,14 @@
-from domain.common.output import write_text_file
-from domain.common.progress_reporter import ProgressReporter
-from domain.interfaces.transcriber import ITranscriber
-from settings import logger
+from src.domain.common.output import write_text_file
+from src.domain.interfaces.progress_reporter import IProgressReporter
+from src.domain.interfaces.transcriber import ITranscriber
+from src.settings import logger
+
 
 class TranscribeService:
     def __init__(self, transcriber: ITranscriber):
         self.transcriber = transcriber
 
-    def transcribe_and_save(self, outdir: str, outname: str, option_args: dict, progress: ProgressReporter | None = None):
+    def transcribe_and_save(self, outdir: str, outname: str, option_args: dict, progress: IProgressReporter | None = None):
         try:
             results = self.transcriber.run(option_args=option_args, progress=progress)
             

@@ -2,14 +2,14 @@ import os
 
 import torchaudio
 
-from domain.common.plot import plot_audio_analysis
-from domain.common.progress_reporter import ProgressReporter
-from domain.entity.audio_entity import AudioEntity
-from domain.logics.audio_loader import AudioLoader
-from domain.logics.audio_normalizer import AudioNormalizer
-from domain.logics.audio_processor import AudioProcessor
-from domain.logics.transient_noise_reducer import TransientNoiseReducer
-from domain.logics.vocal_enhancer import VocalEnhancer
+from src.domain.common.plot import plot_audio_analysis
+from src.domain.entity.audio_entity import AudioEntity
+from src.domain.interfaces.progress_reporter import IProgressReporter
+from src.domain.logics.audio_loader import AudioLoader
+from src.domain.logics.audio_normalizer import AudioNormalizer
+from src.domain.logics.audio_processor import AudioProcessor
+from src.domain.logics.transient_noise_reducer import TransientNoiseReducer
+from src.domain.logics.vocal_enhancer import VocalEnhancer
 
 
 class PreprocessingService:
@@ -26,7 +26,7 @@ class PreprocessingService:
         self._steps = list()  # 音声処理のステップ
     
 
-    def process(self, path: str, progress: ProgressReporter | None = None) -> AudioEntity:
+    def process(self, path: str, progress: IProgressReporter | None = None) -> AudioEntity:
         # Step 1: ファイル読み込みとリサンプリング、モノラル変換
         if progress:
             progress.update.preprocessing(0, "音声ファイルを読み込み中...")

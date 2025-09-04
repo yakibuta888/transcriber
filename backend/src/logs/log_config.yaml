@@ -13,13 +13,17 @@ handlers:
   file:
     class: logging.FileHandler
     level: INFO
-    filename: './src/log/app.log'
+    filename: './src/logs/transcriber.log'
     formatter: baseFormat
 loggers:
-  settings:
+  app:
     level: DEBUG
     handlers: [console, file]
     propagate: False
+  cui:
+    level: INFO
+    handlers: [file]
+    propagate: False
 root:
-  level: DEBUG
+  level: WARNING
   handlers: [console]

@@ -1,5 +1,8 @@
-version: '3.8'
-
+networks:
+  default:
+    driver: bridge
+  net_i:
+    internal: true
 services:
   # frontend:
   #   container_name: frontend-$PROJECT_NAME
@@ -20,14 +23,17 @@ services:
   #     - ./.env
   #     - ./frontend/frontend.env
   #   volumes:
-  #     - logs:$WORK_DIR/logs
+  #     - frontend-logs:$WORK_DIR/logs
   #     - ./frontend:$WORK_DIR:ro
   #     - $WORK_DIR/node_modules
   #   depends_on:
   #     - backend
 
   backend:
-    container_name: backend-$PROJECT_NAME
+    image: $PROJECT_NAME
+    container_name: app-$PROJECT_NAME
+    networks:
+      - net_i
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -37,8 +43,24 @@ services:
         - HOMEDIR=$HOME_DIR
         - USERID=$USER_ID
         - GROUPID=$GROUP_ID
-    ports:
-      - $IP:8000:8000
+        - HUGGINGFACE_TOKEN=$HUGGING_FACE_TOKEN
+    volumes:
+      - backend-logs:$WORK_DIR/src/logs
+    deploy:
+      resources:
+        limits:
+          cpus: '16'
+          memory: 64g
+        reservations:
+          cpus: '8'
+          memory: 16g
+          # compose up(start)で実行する場合は、下記のコメントアウトを外す
+          # devices:
+          #   - driver: nvidia
+          #     count: all
+          #     capabilities: [gpu]
+    # ports:
+    #   - $IP:8000:8000
     tty: true
     env_file:
       - ./.env
@@ -68,10 +90,7 @@ services:
   #     - ./redis/data:/data
   #     - ./redis/conf/redis.conf:/usr/local/etc/redis/redis.conf:ro
 
-networks:
-  default:
-    driver: bridge
-
-# volumes:
-  # logs:
+volumes:
+  backend-logs:
+  # frontend-logs:
   # db-store:

@@ -3,17 +3,17 @@ import torchaudio
 
 from concurrent.futures import ThreadPoolExecutor
 
-from config import HUGGING_FACE_TOKEN
-from domain.common.progress_reporter import ProgressReporter
-from domain.common.get_models_dir import get_models_path
-from domain.exception.could_not_diarize_error import CouldNotDiarizeError
-from domain.entity.audio_entity import AudioEntity
-from domain.interfaces.transcriber import ITranscriber
-from domain.logics.merger import ResultMerger
-from domain.logics.speaker_diarizer import SpeakerDiarizer
-from domain.logics.whisper_large import WhisperLargeTranscriber
-from domain.services.pre_processing_service import PreprocessingService
-from settings import logger
+from src.config import HUGGING_FACE_TOKEN
+from src.domain.common.get_models_dir import get_models_path
+from src.domain.exception.could_not_diarize_error import CouldNotDiarizeError
+from src.domain.entity.audio_entity import AudioEntity
+from src.domain.interfaces.progress_reporter import IProgressReporter
+from src.domain.interfaces.transcriber import ITranscriber
+from src.domain.logics.merger import ResultMerger
+from src.domain.logics.speaker_diarizer import SpeakerDiarizer
+from src.domain.logics.whisper_large import WhisperLargeTranscriber
+from src.domain.services.pre_processing_service import PreprocessingService
+from src.settings import logger
 
 
 class LargeService(ITranscriber):
@@ -28,7 +28,7 @@ class LargeService(ITranscriber):
         if not diarizer_model_id:
             diarizer_model_id = "speaker-diarization-3.1"
         try:
-            self.diarizer_model = get_models_path(os.path.join(diarizer_model_id, "config.yaml"))
+            self.diarizer_model = get_models_path(os.path.join("pyannote", diarizer_model_id, "config.yaml"))
             logger.info(f"Using diarizer model: {self.diarizer_model}")
         except FileNotFoundError as e:
             self.diarizer_model = f"pyannote/{diarizer_model_id}"
@@ -52,13 +52,26 @@ class LargeService(ITranscriber):
             raise ValueError("Hugging Face token is required for accessing models.")
 
 
-    def run(self, option_args: dict, progress: ProgressReporter | None = None) -> list[dict]:
+    def run(self, option_args: dict, progress: IProgressReporter | None = None) -> list[dict]:
+        diarize: bool = option_args.get("diarize", True)
+        chunk_length_s: int = option_args.get("chunk_length", 15)
+        if chunk_length_s < 5:
+            chunk_length_s = 5
+            print('\033[31m' + "Chunk length is too short, setting to 5 seconds. Please set a value between 5 and 180 seconds." + '\033[0m')
+            logger.warning("Chunk length is too short, setting to 5 seconds.")
+        elif chunk_length_s > 180:
+            chunk_length_s = 180
+            print('\033[31m' + "Chunk length is too long, setting to 180 seconds. Please set a value between 5 and 180 seconds." + '\033[0m')
+            logger.warning("Chunk length is too long, setting to 180 seconds.")
+        else:
+            logger.debug(f"Chunk length is set to {chunk_length_s} seconds.")
+
         if progress:
             progress.set_totals(
                 preprocessing=6,
-                diarization=1,
+                diarization=1 if diarize else 0,
                 transcription=1,
-                merge=1,  # 後で設定
+                merge=1 if diarize else 0,  # 後で設定
                 output=1  # 後で設定
             )
 
@@ -73,11 +86,57 @@ class LargeService(ITranscriber):
                 def asr_task():
                     transcriber = WhisperLargeTranscriber(
                         self.whisper_model,
-                        chunk_length_s=option_args.get("chunk_length", 15),
+                        diarize=diarize,
+                        chunk_length_s=chunk_length_s,
                         batch_size=option_args.get("batch_size", 8),
                         flash_attention=option_args.get("flash_attention", False),
                     )
-                    return transcriber.transcribe(audio_entity.for_whisper(), progress=progress)
+                    audio_array = audio_entity.for_whisper()["array"]
+                    sampling_rate = audio_entity.for_whisper()["sampling_rate"]
+                    chunk_samples = int(chunk_length_s * sampling_rate)
+                    
+                    chunks = [
+                        audio_array[i:i + chunk_samples]
+                        for i in range(0, len(audio_array), chunk_samples)
+                    ]
+                    
+                    # 進捗開始通知
+                    if progress:
+                        steps_info = {
+                            "total": len(chunks),
+                            "current": 0,
+                            "detail": f"/{len(chunks)}:音声認識中..."
+                        }
+                        progress.set_transcribe_total(len(chunks))
+                        progress.update.transcription(0, "音声認識を開始")
+
+                    final_transcript: list[dict] = []
+                    for idx, chunk in enumerate(chunks):
+                        steps_info["current"] = idx + 1
+                        offset_sec = idx * chunk_length_s  # チャンクの開始位置（全体音声に対して何秒目か）
+                        chunk_audio = {
+                            "array": chunk,
+                            "sampling_rate": sampling_rate,
+                        }
+                        chunk_results = transcriber.transcribe(chunk_audio, steps_info=steps_info)  # Whisperから得られるlist[dict]
+                        for seg in chunk_results:
+                            if isinstance(seg, str):
+                                seg = {
+                                    "timestamp": [0, chunk_length_s],
+                                    "text": seg
+                                }
+                            # チャンク内のtimestampを絶対時刻に補正
+                            abs_start = seg['timestamp'][0] + offset_sec if seg['timestamp'][0] is not None else offset_sec
+                            abs_end = seg['timestamp'][1] + offset_sec if seg['timestamp'][1] is not None else chunk_length_s + offset_sec
+                            final_transcript.append({
+                                'timestamp': [abs_start, abs_end],
+                                'text': seg['text'],
+                            })
+
+                    if progress:
+                        progress.update.transcription(steps_info["current"], "音声認識が完了")
+
+                    return final_transcript
 
                 # Diarization: 話者分離
                 def diar_task():
@@ -91,24 +150,33 @@ class LargeService(ITranscriber):
                     )
 
                 future_asr = executor.submit(asr_task)
-                future_diar = executor.submit(diar_task)
+                future_diar = executor.submit(diar_task) if diarize else None
                 asr_segments = future_asr.result()
-                diar_segments = future_diar.result()
+                diar_segments = future_diar.result() if future_diar else None
 
-            if not asr_segments or not diar_segments:
+            if not asr_segments or (diarize and not diar_segments):
                 logger.warning("No segments detected. Exiting transcription. @LargeService.run")
                 raise CouldNotDiarizeError("No segments detected. Please check the audio file or models.")
 
-            logger.debug(f"ASR segments: {len(asr_segments)}, Diarization segments: {len(diar_segments)}")
+            logger.debug(f"ASR segments: {len(asr_segments)}, Diarization segments: {len(diar_segments or [])}")
             
-            # 話者情報付与前に正確な数を設定
-            if progress:
-                progress.set_merge_total(len(asr_segments))
-            
-            # セグメントごとに話者情報を付与
-            results = ResultMerger.merge(asr_segments, diar_segments, progress=progress)
-            logger.debug("Transcription with speaker attribution completed.")
-            return results
+            if diarize:
+                # 話者情報付与前に正確な数を設定
+                if progress:
+                    progress.set_merge_total(len(asr_segments))
+                
+                # セグメントごとに話者情報を付与
+                results = ResultMerger.merge(asr_segments, diar_segments, progress=progress)
+                logger.debug("Transcription with speaker attribution completed.")
+                return results
+            else:
+                results = [{
+                    'start': seg['timestamp'][0],
+                    'end': seg['timestamp'][1],
+                    'speaker': "Unknown",
+                    'text': seg['text'],
+                } for seg in asr_segments]
+                return results
 
         except Exception as e:
             logger.error(f"An error occurred during transcription. @LargeService.run: {e}", exc_info=True)

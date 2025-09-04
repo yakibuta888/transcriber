@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1.4.1
-FROM python:3.12.11-slim as builder
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04 as builder
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 ARG WORKDIR
 ENV PATH=${WORKDIR}/vendor/bin:$PATH \
@@ -7,14 +9,22 @@ ENV PATH=${WORKDIR}/vendor/bin:$PATH \
 	PYTHONUSERBASE=${WORKDIR}/vendor
 WORKDIR ${WORKDIR}
 
-# Rust(for DeepFilterNet)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://ftp.jaist.ac.jp/pub/Linux/ubuntu/|g' /etc/apt/sources.list && \
+    sed -i 's|http://security.ubuntu.com/ubuntu|http://ftp.jaist.ac.jp/pub/Linux/ubuntu/|g' /etc/apt/sources.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
+	python3 \
+	python3-pip \
+	python3-venv \
     build-essential \
     git \
     curl \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
+
+RUN ln -s /usr/bin/python3 /usr/local/bin/python
+
+# Rust(for DeepFilterNet)
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH="$PATH:/root/.cargo/bin"
 
@@ -23,14 +33,21 @@ RUN pip install --upgrade pip \
     && pip install --no-cache-dir --target=${WORKDIR}/vendor -r requirements.txt
 
 
-FROM python:3.12.11-slim as production
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04 as production
 
 ENV DISPLAY=$DISPLAY
 ENV DEBIAN_FRONTEND=noninteractive
 
 # 必要なパッケージのインストール
 COPY packages.txt /tmp/packages.txt
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://ftp.jaist.ac.jp/pub/Linux/ubuntu/|g' /etc/apt/sources.list && \
+    sed -i 's|http://security.ubuntu.com/ubuntu|http://ftp.jaist.ac.jp/pub/Linux/ubuntu/|g' /etc/apt/sources.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
+	python3 \
+	python3-pip \
+	python3-venv \
+	vim \
+	git \
 	# 日本語環境
 	task-japanese \
 	locales \
@@ -44,12 +61,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	&& apt-get clean -y \
 	&& rm -rf /var/lib/apt/lists/*
 
+RUN ln -s /usr/bin/python3 /usr/local/bin/python
+
 # 日本語設定
 RUN sed -i -E 's/# (ja_JP.UTF-8)/\1/' /etc/locale.gen \
 	&& locale-gen
 ENV LANG ja_JP.UTF-8
 ENV LANGUAGE ja_JP:ja
 ENV LC_ALL ja_JP.UTF-8
+# JST
+RUN ln -fs /usr/share/zoneinfo/Asia/Tokyo /etc/localtime && \
+    dpkg-reconfigure -f noninteractive tzdata
 
 # セキュリティアップデートの適用
 RUN apt-get update && apt-get upgrade -y \
@@ -84,15 +106,23 @@ EOF
 USER ${USERNAME}
 
 # ビルドステージからコピーした依存関係とアプリケーションのソースコードをコピー
-COPY --chown=${USERID}:${GROUPID} src/ ./src/
+COPY --chown=${USERID}:${GROUPID} .cache/ ${HOMEDIR}/.cache/
 COPY --chown=${USERID}:${GROUPID} --from=builder ${WORKDIR}/vendor ./vendor/
+COPY --chown=${USERID}:${GROUPID} src/ ./src/
 
 # 環境変数の設定
 # Pythonがpycファイルとdiscへの書き込みを行わないようにする
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
+# token
+ARG HUGGINGFACE_TOKEN
+ENV HUGGING_FACE_TOKEN=${HUGGINGFACE_TOKEN}
+ENV HF_HUB_OFFLINE=1
+ENV PYANNOTE_CACHE=${WORKDIR}/src/models/pyannote
+
+# DeepFilterNetのバージョンを指定
+ENV DEEPFILTERNET_VERSION=0.5.6
+
 # アプリケーションの起動コマンド
-# CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "src.main:app", "--bind", "0.0.0.0:8000", "--workers", "4"]
-# CMD ["python", "src/main.py"]
 CMD ["sleep", "infinity"]

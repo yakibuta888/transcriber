@@ -1,0 +1,30 @@
+diff --git a/config.yaml b/config.yaml
+index 5402e3c..5676a75 100644
+--- a/config.yaml
++++ b/config.yaml
+@@ -4,10 +4,10 @@ pipeline:
+   name: pyannote.audio.pipelines.SpeakerDiarization
+   params:
+     clustering: AgglomerativeClustering
+-    embedding: pyannote/wespeaker-voxceleb-resnet34-LM
++    embedding: /home/client/app/src/models/pyannote/wespeaker-voxceleb-resnet34-LM/pytorch_model.bin
+     embedding_batch_size: 32
+     embedding_exclude_overlap: true
+-    segmentation: pyannote/segmentation-3.0
++    segmentation: /home/client/app/src/models/pyannote/segmentation-3.0/pytorch_model.bin
+     segmentation_batch_size: 32
+ 
+ params:
+diff --git a/handler.py b/handler.py
+index 102ad99..e3b3922 100644
+--- a/handler.py
++++ b/handler.py
+@@ -28,7 +28,7 @@ import torch
+ class EndpointHandler:
+     def __init__(self, path=""):
+         # initialize pretrained pipeline
+-        self._pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
++        self._pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", local_files_only=True)
+ 
+         # send pipeline to GPU if available
+         if torch.cuda.is_available():

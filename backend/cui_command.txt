@@ -1,0 +1,3 @@
+python src/cui/main_cui.py --model whisper-large-v3 --infile ./untracked/noisy.mp3 --outname "noisy" --diarize
+
+docker run --rm -v /home/t0588/work:/home/client/app/files transcriber bash -c 'sudo chmod -R 777 /home/client/app/files && python src/cui/main_cui.py --model whisper-large-v3 --infile ./files/test11-16m.mp3 --outname "run-test11-16m" && sudo cp /home/client/app/src/logs/transcriber.log /home/client/app/files'

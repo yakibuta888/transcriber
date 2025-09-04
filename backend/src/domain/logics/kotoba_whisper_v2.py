@@ -1,8 +1,7 @@
 import torch
 from transformers.pipelines import pipeline
 
-from domain.common.progress_reporter import ProgressReporter
-
+from src.domain.interfaces.progress_reporter import IProgressReporter
 
 
 class KotobaWhisperTranscriber:
@@ -39,7 +38,7 @@ class KotobaWhisperTranscriber:
         )
         
 
-    def transcribe(self, audio_file: str, add_punctuation: bool = True, num_speakers: int | None = None, min_speakers: int | None = None, max_speakers: int | None = None, add_silence_start: float | None = None, add_silence_end: float | None = None, progress: ProgressReporter | None = None):
+    def transcribe(self, audio_file: str, add_punctuation: bool = True, num_speakers: int | None = None, min_speakers: int | None = None, max_speakers: int | None = None, add_silence_start: float | None = None, add_silence_end: float | None = None, progress: IProgressReporter | None = None):
 
         # pipeの引数として渡す辞書を作成
         pipe_kwargs = {

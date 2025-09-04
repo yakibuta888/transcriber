@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from df import enhance, init_df
 from torchaudio.transforms import Resample
 
-from settings import logger
+from src.settings import logger
 
 
 class TransientNoiseReducer:

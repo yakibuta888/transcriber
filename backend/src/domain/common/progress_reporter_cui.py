@@ -1,13 +1,11 @@
+import sys
+
 from src.domain.interfaces.progress_reporter import IProgressReporter
 from src.settings import logger
 
 
-class ProgressReporter(IProgressReporter):
-    def __init__(self, window, bar_key, status_key, log_key=None, weights=None, step_labels=None):
-        self.window = window
-        self.bar_key = bar_key
-        self.status_key = status_key
-        self.log_key = log_key
+class ProgressReporterCUI(IProgressReporter):
+    def __init__(self, weights=None, step_labels=None):
         self.log_buffer = []
         self.weights = weights or {
             'preprocessing': 20,
@@ -15,8 +13,7 @@ class ProgressReporter(IProgressReporter):
             'transcription': 35,
             'merge': 8,
             'output': 2
-        }  # デフォルトの重み付け
-        # ステップ表示名のデフォルト
+        }
         self.step_labels = step_labels or {
             'preprocessing': '音声前処理',
             'diarization': '話者分離',
@@ -24,7 +21,6 @@ class ProgressReporter(IProgressReporter):
             'merge': '結果統合',
             'output': 'ファイル出力'
         }
-        # 新しいステップにも対応
         for key in self.weights:
             if key not in self.step_labels:
                 self.step_labels[key] = key
@@ -33,7 +29,6 @@ class ProgressReporter(IProgressReporter):
         self.update = self._make_update_manager()
 
     def _make_update_manager(self):
-        # 任意のステップ名で呼び出せるようにする
         class UpdateManager:
             def __init__(self, parent):
                 self.parent = parent
@@ -46,80 +41,61 @@ class ProgressReporter(IProgressReporter):
                 )
         return UpdateManager(self)
 
-
     def _update_task(self, task_name, current, status_text):
-        """共通の更新処理"""
         self.completed[task_name] = current
         total_progress = 0
-        # 有効なステップだけで進捗を計算
         active_weights = {k: self.weights[k] for k in self.totals if self.totals[k] > 0}
         for task, weight in active_weights.items():
             if self.totals[task] > 0:
                 task_progress = (self.completed[task] / self.totals[task]) * weight
                 total_progress += task_progress
-
         max_weight = sum(active_weights.values())
-        self.window[self.bar_key].update_bar(int(total_progress), max=max_weight)
         percent = (total_progress / max_weight) * 100 if max_weight > 0 else 0
+
         display_text = f"{status_text} (全体: {percent:.1f}%)"
+        self._print_progress_bar(percent, status_text)
+        self._add_log(display_text)
 
-        # ステータス表示を更新
-        self.window[self.status_key].update(display_text)
-
-        # ログ用multilineにも同じ内容を追加
-        if self.log_key:
-            self._add_log(display_text)
-        
-        self.window.refresh()
-
+    def _print_progress_bar(self, percent, status_text):
+        bar_length = 50
+        filled_length = int(round(bar_length * percent / 100))
+        bar = '=' * filled_length + '-' * (bar_length - filled_length)
+        print(f"\r[{bar}] {percent:.1f}% | {status_text}", end='\n', flush=False)
+        if percent >= 100:
+            print('')  # 改行
 
     def set_totals(self, **step_totals):
-        # step_totals: {'transcription': 100, 'output': 1} のように可変長で渡す
-        # 使うステップだけを有効化
         self.totals.update({k: v for k, v in step_totals.items() if k in self.weights})
         self.completed = {k: 0 for k in self.totals}
-        total_weighted = sum(self.weights[k] for k in self.totals)
-        self.window[self.bar_key].update_bar(0, max=total_weighted)
-
+        # 初期状態のバー表示
+        self._print_progress_bar(0, "進捗開始")
 
     def set_output_total(self, output_lines):
-        """出力行数を後から設定"""
         self.totals['output'] = output_lines
-    
+
     def set_merge_total(self, merge_segments):
-        """マージ処理数を後から設定"""
         self.totals['merge'] = merge_segments
     
+    def set_transcribe_total(self, transcribe_segments):
+        self.totals['transcription'] = transcribe_segments
+    
+    def set_diarization_total(self, diarization_segments):
+        self.totals['diarization'] = diarization_segments
 
     def _add_log(self, message):
-        """ログ用multilineに内容を追加（タイムスタンプ付き）"""
-        if not self.log_key:
-            return
-            
         try:
             import datetime
             timestamp = datetime.datetime.now().strftime("%H:%M:%S")
             log_message = f"[{timestamp}] {message}"
             logger.info(f"Log: {log_message}")
-
-            # 既存のログを取得
-            if not self.log_buffer:
-                self.log_buffer.append(self.window[self.log_key].get())
-
-            # ログ履歴に追加（最大1000行まで保持）
             self.log_buffer.append(log_message)
             if len(self.log_buffer) > 1000:
-                self.log_buffer.pop(0)  # 古いログを削除
-            
-            # multilineを更新
-            log_text = "\n".join(self.log_buffer) + "\n"
-            self.window[self.log_key].update(log_text)
-            
+                self.log_buffer.pop(0)
+            # ログは適宜print（or必要ならファイル保存等）
+            # print(f"\n{log_message}")
         except Exception as e:
-            print(f"Warning: Could not update log: {e}")
+            print(f"Warning: Could not update log: {e}", file=sys.stderr)
 
     def clear_log(self):
-        """ログをクリア"""
-        if self.log_key:
-            self.log_buffer.clear()
-            self.window[self.log_key].update("")
+        self.log_buffer.clear()
+

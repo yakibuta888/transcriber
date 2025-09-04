@@ -1,12 +1,12 @@
 import os
 
-from config import HUGGING_FACE_TOKEN
-from domain.common.get_models_dir import get_models_path
-from domain.common.progress_reporter import ProgressReporter
-from domain.exception.could_not_transcribe_error import CouldNotTranscribeError
-from domain.interfaces.transcriber import ITranscriber
-from domain.logics.kotoba_whisper_v2 import KotobaWhisperTranscriber
-from settings import logger
+from src.config import HUGGING_FACE_TOKEN
+from src.domain.common.get_models_dir import get_models_path
+from src.domain.exception.could_not_transcribe_error import CouldNotTranscribeError
+from src.domain.interfaces.progress_reporter import IProgressReporter
+from src.domain.interfaces.transcriber import ITranscriber
+from src.domain.logics.kotoba_whisper_v2 import KotobaWhisperTranscriber
+from src.settings import logger
 
 
 class KotobaWhisperService(ITranscriber):
@@ -44,7 +44,7 @@ class KotobaWhisperService(ITranscriber):
             raise ValueError("Hugging Face token is required for accessing models.")
 
 
-    def run(self, option_args: dict, progress: ProgressReporter | None = None) -> list[dict]:
+    def run(self, option_args: dict, progress: IProgressReporter | None = None) -> list[dict]:
         # 進捗開始通知
         if progress:
             progress.set_totals(

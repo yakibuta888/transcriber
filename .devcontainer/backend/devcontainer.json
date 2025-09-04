@@ -1,8 +1,8 @@
 {
   "name": "backend-transcriber",
   "dockerComposeFile": [
-    "../../docker-compose.yml",
-    "../docker-compose.devcontainer.yml"
+    "../../compose.yml",
+    "../compose.devcontainer.yml"
   ],
   "remoteUser": "client",
   "service": "backend",
