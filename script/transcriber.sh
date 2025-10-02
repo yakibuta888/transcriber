@@ -11,7 +11,7 @@ MODEL="$2"
 AUDIOFILE="$3"
 OUTNAME="$4"
 OPTIONAL="$5"
-USERDIR="/home/$USER/$WORKDIR"
+SHARED_DIR="/mnt/data/$WORKDIR"
 
 # diarizeオプション判定
 DIARIZE_ARG=""
@@ -25,6 +25,6 @@ docker run --rm \
   --hostname transcriber \
   --add-host transcriber:127.0.0.1 \
   --name app-transcriber_$(date +"%Y%m%d_%H%M%S") \
-  -v "$USERDIR:/home/client/app/files" \
+  -v "$SHARED_DIR:/home/client/app/files" \
   transcriber \
   bash -c "python src/cui/main_cui.py --model $MODEL --infile ./files/$AUDIOFILE --outname \"$OUTNAME\" $DIARIZE_ARG && cp /home/client/app/src/logs/transcriber.log /home/client/app/files"

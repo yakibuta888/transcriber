@@ -97,7 +97,8 @@ ARG GROUPID
 RUN <<-EOF
 	echo "Create User = ${USERID}. Group = ${GROUPID}"
 	groupadd -g ${GROUPID} ${USERNAME}
-	useradd -m -s /bin/bash -d ${HOMEDIR} -u ${USERID} -g ${GROUPID} ${USERNAME}
+	groupadd -g 1005 shared
+	useradd -m -s /bin/bash -d ${HOMEDIR} -u ${USERID} -g ${GROUPID} -G shared ${USERNAME}
 	mkdir -p /etc/sudoers.d/
 	echo ${USERNAME} ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/${USERNAME}
 	chmod 0440 /etc/sudoers.d/${USERNAME}
