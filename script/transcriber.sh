@@ -27,4 +27,4 @@ docker run --rm \
   --name app-transcriber_$(date +"%Y%m%d_%H%M%S") \
   -v "$USERDIR:/home/client/app/files" \
   transcriber \
-  bash -c "sudo chmod -R 777 /home/client/app/files && python src/cui/main_cui.py --model $MODEL --infile ./files/$AUDIOFILE --outname \"$OUTNAME\" $DIARIZE_ARG && sudo cp /home/client/app/src/logs/transcriber.log /home/client/app/files"
+  bash -c "python src/cui/main_cui.py --model $MODEL --infile ./files/$AUDIOFILE --outname \"$OUTNAME\" $DIARIZE_ARG && cp /home/client/app/src/logs/transcriber.log /home/client/app/files"
