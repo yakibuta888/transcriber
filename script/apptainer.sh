@@ -22,12 +22,18 @@ if [ "$OPTIONAL" = "diarize" ]; then
   DIARIZE_ARG="--diarize"
 fi
 
-export APPTAINER_CACHEDIR=/mnt/data/apptainer_cache
-export TMPDIR=/mnt/data/large_dtmp
+export APPTAINER_CACHEDIR="$SHARED_DIR/apptainer_cache"
+export APPTAINER_TMPDIR="$SHARED_DIR/tmp"
+mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
 apptainer cache clean --force
 
+export APPTAINERENV_PYTHONPATH="$HOME/app/src/models/DeepFilterNet-0.5.6/DeepFilterNet:$HOME/app/vendor:$HOME/app:$PYTHONPATH"
 apptainer exec --nv --net --network none \
-  --bind "$SHARED_DIR:/home/$HOST_USER/app/files" \
+  --no-mount home,cwd \
+  --contain --env MPLCONFIGDIR=/tmp/matplotlib \
+  --env DEEPFILTER_LOG_FILE=/tmp/enhance.log \
+  --env NUMBA_CACHE_DIR=/tmp/numba_cache \
+  --bind "$SHARED_DIR:/home/$HOST_USER/files" \
   --pwd /home/$HOST_USER/app \
   /mnt/data/container/transcriber.sif \
-  bash -c "python src/cui/main_cui.py --model $MODEL --infile ./files/$AUDIOFILE --outname \"$OUTNAME\" $DIARIZE_ARG && cp /home/$HOST_USER/app/src/logs/transcriber.log /home/$HOST_USER/app/files"
+  bash -c "python src/cui/main_cui.py --model $MODEL --infile /home/$HOST_USER/files/$AUDIOFILE --outname \"$OUTNAME\" $DIARIZE_ARG"

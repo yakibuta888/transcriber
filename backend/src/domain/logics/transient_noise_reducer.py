@@ -1,5 +1,6 @@
 import librosa
-import pickle
+import os
+import sys
 import torch
 import torch.nn as nn
 import noisereduce as nr
@@ -7,6 +8,11 @@ import numpy as np
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
+deepfilternet_dir = os.path.abspath(os.path.join(
+    os.path.dirname(__file__), '../../models/DeepFilterNet-0.5.6'
+))
+if deepfilternet_dir not in sys.path:
+    sys.path.insert(0, deepfilternet_dir)
 from df import enhance, init_df
 from torchaudio.transforms import Resample
 

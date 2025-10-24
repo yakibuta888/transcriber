@@ -32,6 +32,14 @@ COPY requirements.txt .
 RUN pip install --upgrade pip \
     && pip install --no-cache-dir --target=${WORKDIR}/vendor -r requirements.txt
 
+# === DeepFilterNet 部分をのみコピー ===
+COPY src/models/DeepFilterNet-0.5.6 ${WORKDIR}/DeepFilterNet-0.5.6
+
+# === libdfビルド ===
+RUN pip install --no-cache-dir maturin && \
+    cd ${WORKDIR}/DeepFilterNet-0.5.6 && \
+    maturin build --release -m pyDF/Cargo.toml && \
+	pip install $(find target/wheels -name "DeepFilterLib-*.whl") --target=${WORKDIR}/vendor
 
 FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04 as production
 
@@ -89,27 +97,10 @@ ENV PATH=${WORKDIR}/vendor/bin:$PATH \
 	PYTHONUSERBASE=${WORKDIR}/vendor
 WORKDIR ${WORKDIR}
 
-# Create the user
-ARG USERNAME
-ARG HOMEDIR
-ARG USERID
-ARG GROUPID
-RUN <<-EOF
-	echo "Create User = ${USERID}. Group = ${GROUPID}"
-	groupadd -g ${GROUPID} ${USERNAME}
-	groupadd -g 1005 shared
-	useradd -m -s /bin/bash -d ${HOMEDIR} -u ${USERID} -g ${GROUPID} -G shared ${USERNAME}
-	mkdir -p /etc/sudoers.d/
-	echo ${USERNAME} ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/${USERNAME}
-	chmod 0440 /etc/sudoers.d/${USERNAME}
-    chown -R ${USERID}:${GROUPID} ${HOMEDIR}
-EOF
-USER ${USERNAME}
-
 # ビルドステージからコピーした依存関係とアプリケーションのソースコードをコピー
-COPY --chown=${USERID}:${GROUPID} .cache/ ${HOMEDIR}/.cache/
-COPY --chown=${USERID}:${GROUPID} --from=builder ${WORKDIR}/vendor ./vendor/
-COPY --chown=${USERID}:${GROUPID} src/ ./src/
+COPY .cache/ ./.cache/
+COPY --from=builder ${WORKDIR}/vendor ./vendor/
+COPY src/ ./src/
 
 # 環境変数の設定
 # Pythonがpycファイルとdiscへの書き込みを行わないようにする
@@ -124,6 +115,9 @@ ENV PYANNOTE_CACHE=${WORKDIR}/src/models/pyannote
 
 # DeepFilterNetのバージョンを指定
 ENV DEEPFILTERNET_VERSION=0.5.6
+# DeepFilterNetのパスをPYTHONPATHに追加
+ARG USER_HOME=/home/${USER}
+ENV PYTHONPATH="${USER_HOME}/app/src/models/DeepFilterNet-0.5.6/DeepFilterNet:${PYTHONPATH}"
 
 # アプリケーションの起動コマンド
 CMD ["sleep", "infinity"]
