@@ -13,7 +13,7 @@ handlers:
   file:
     class: logging.FileHandler
     level: INFO
-    filename: '../files/transcriber.log'
+    filename: '/files/transcriber.log'
     formatter: baseFormat
 loggers:
   app:

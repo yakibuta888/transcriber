@@ -27,13 +27,15 @@ export APPTAINER_TMPDIR="$SHARED_DIR/tmp"
 mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
 apptainer cache clean --force
 
-export APPTAINERENV_PYTHONPATH="$HOME/app/src/models/DeepFilterNet-0.5.6/DeepFilterNet:$HOME/app/vendor:$HOME/app:$PYTHONPATH"
-apptainer exec --nv --net --network none \
+export APPTAINERENV_PYTHONPATH="/app/src/models/DeepFilterNet-0.5.6/DeepFilterNet:/app/vendor:/app:$PYTHONPATH"
+
+nohup apptainer exec --nv --net --network none \
   --no-mount home,cwd \
   --contain --env MPLCONFIGDIR=/tmp/matplotlib \
   --env DEEPFILTER_LOG_FILE=/tmp/enhance.log \
   --env NUMBA_CACHE_DIR=/tmp/numba_cache \
-  --bind "$SHARED_DIR:/home/$HOST_USER/files" \
-  --pwd /home/$HOST_USER/app \
+  --bind "$SHARED_DIR:/files" \
+  --pwd /app \
   /mnt/data/container/transcriber.sif \
-  bash -c "python src/cui/main_cui.py --model $MODEL --infile /home/$HOST_USER/files/$AUDIOFILE --outname \"$OUTNAME\" $DIARIZE_ARG"
+  bash -c "python src/cui/main_cui.py --model $MODEL --infile /files/$AUDIOFILE --outname \"$OUTNAME\" $DIARIZE_ARG" \
+  2>&1 | tee "$SHARED_DIR/progress.log" &

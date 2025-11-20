@@ -38,7 +38,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       args:
-        - WORKDIR=$WORK_DIR
+        - WORKDIR=/app
         - USERNAME=$USER_NAME
         - HOMEDIR=$HOME_DIR
         - USERID=$USER_ID
